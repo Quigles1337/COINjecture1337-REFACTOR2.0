@@ -5,6 +5,27 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.10] - 2025-10-15
+
+### Fixed
+- **IPFS Health Check Method** - Corrected IPFS health check to use POST method for `/api/v0/version` endpoint
+- **IPFS Connectivity** - Fixed IPFS API connectivity issues preventing CID generation
+- **Genesis Block Regeneration** - Cleared immutable cache to allow regeneration with proper IPFS integration
+
+### Technical Details
+- **Health Check Correction**: Reverted to `_make_request("version", method="POST")` as IPFS API requires POST for version endpoint
+- **API Compatibility**: IPFS API `/api/v0/version` endpoint returns 405 Method Not Allowed for GET requests
+- **Cache Management**: Cleared existing immutable genesis block cache to force regeneration with IPFS CIDs
+- **Service Integration**: IPFS daemon now properly accessible for proof bundle storage
+
+### Impact
+- **IPFS Health Checks**: Now properly detect IPFS availability and connectivity
+- **CID Generation**: Genesis blocks can now be created with valid IPFS CIDs
+- **Proof Storage**: Full proof bundles are now properly stored and accessible via IPFS
+- **API Responses**: Block headers will now include valid `offchain_cid` values
+
+#buildinginpublic #ipfsintegration #healthcheck #apicompatibility #cidgeneration
+
 ## [3.3.9] - 2025-10-15
 
 ### Fixed
