@@ -18,9 +18,9 @@ This document describes the different ways to download and install COINjecture f
 **For:** All platforms, zero technical setup required
 
 **Download and run:**
-- **macOS**: `COINjecture-3.5.0-macOS.dmg` - Double-click to install
-- **Windows**: `COINjecture-3.5.0-Windows-Installer.exe` - Run installer
-- **Linux**: `COINjecture-3.5.0-Linux.AppImage` - Make executable and run
+- **macOS**: `COINjecture-3.6.0-macOS.dmg` - Double-click to install
+- **Windows**: `COINjecture-3.6.0-Windows-Installer.exe` - Run installer
+- **Linux**: `COINjecture-3.6.0-Linux.AppImage` - Make executable and run
 
 **Features:**
 - ✅ No Python installation required
@@ -110,9 +110,9 @@ coinjectured interactive
 
 ### For End Users (Non-Technical) - RECOMMENDED
 1. **Download** the standalone application for your platform:
-   - **macOS**: `COINjecture-3.5.0-macOS.dmg`
-   - **Windows**: `COINjecture-3.5.0-Windows-Installer.exe`
-   - **Linux**: `COINjecture-3.5.0-Linux.AppImage`
+   - **macOS**: `COINjecture-3.6.0-macOS.dmg`
+   - **Windows**: `COINjecture-3.6.0-Windows-Installer.exe`
+   - **Linux**: `COINjecture-3.6.0-Linux.AppImage`
 2. **Install** using the platform-specific installer
 3. **Launch** COINjecture from Applications/Start Menu
 4. **Choose** "Interactive Menu" for guided experience

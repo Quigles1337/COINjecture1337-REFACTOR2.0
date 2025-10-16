@@ -55,9 +55,9 @@ cat > "$PROJECT_ROOT/cli-packages/shared/launcher/Info.plist" << 'EOF'
     <key>CFBundleIdentifier</key>
     <string>com.coinjecture.app</string>
     <key>CFBundleVersion</key>
-    <string>3.4.0</string>
+    <string>3.6.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>3.4.0</string>
+    <string>3.6.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -94,7 +94,7 @@ fi
 
 # Create .app bundle
 echo "📦 Creating .app bundle..."
-APP_NAME="COINjecture-3.5.0-macOS.app"
+APP_NAME="COINjecture-3.6.0-macOS.app"
 APP_PATH="dist/packages/$APP_NAME"
 
 # Create app bundle structure
@@ -120,7 +120,7 @@ echo "✅ macOS app bundle created: $APP_PATH"
 # Create DMG
 echo "💿 Creating DMG installer..."
 
-DMG_NAME="COINjecture-3.5.0-macOS.dmg"
+DMG_NAME="COINjecture-3.6.0-macOS.dmg"
 DMG_PATH="dist/packages/$DMG_NAME"
 
 # Remove existing DMG
@@ -138,13 +138,45 @@ cp -R "$APP_PATH" "$TEMP_DMG_DIR/"
 ln -s /Applications "$TEMP_DMG_DIR/Applications"
 
 # Create DMG
-hdiutil create -volname "COINjecture 3.5.0" -srcfolder "$TEMP_DMG_DIR" -ov -format UDZO "$DMG_PATH"
+hdiutil create -volname "COINjecture 3.6.0" -srcfolder "$TEMP_DMG_DIR" -ov -format UDZO "$DMG_PATH"
 
 # Clean up
 rm -rf "$TEMP_DMG_DIR"
 rm -rf "$APP_PATH"
 
 echo "✅ DMG created: $DMG_PATH"
+
+# Code signing (optional)
+echo "🔐 Code signing..."
+if command -v codesign &> /dev/null; then
+    # Create entitlements file
+    python3 "$PROJECT_ROOT/cli-packages/shared/signing/sign_packages.py" entitlements
+    
+    # Sign the DMG
+    if [ -n "$COINJECTURE_DEVELOPER_ID" ]; then
+        echo "   Signing with Developer ID: $COINJECTURE_DEVELOPER_ID"
+        codesign --force --sign "$COINJECTURE_DEVELOPER_ID" "$DMG_PATH"
+        
+        # Notarize (if Apple ID provided)
+        if [ -n "$COINJECTURE_APPLE_ID" ] && [ -n "$COINJECTURE_APP_PASSWORD" ]; then
+            echo "   Submitting for notarization..."
+            xcrun notarytool submit "$DMG_PATH" \
+                --apple-id "$COINJECTURE_APPLE_ID" \
+                --password "$COINJECTURE_APP_PASSWORD" \
+                --team-id "$COINJECTURE_TEAM_ID" \
+                --wait
+            
+            echo "   Stapling notarization..."
+            xcrun stapler staple "$DMG_PATH"
+        fi
+        
+        echo "✅ Code signing completed"
+    else
+        echo "⚠️  COINJECTURE_DEVELOPER_ID not set, skipping code signing"
+    fi
+else
+    echo "⚠️  codesign not found, skipping code signing"
+fi
 
 # Show file size
 SIZE=$(du -h "$DMG_PATH" | cut -f1)

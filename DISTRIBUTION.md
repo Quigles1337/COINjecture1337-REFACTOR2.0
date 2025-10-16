@@ -1,350 +1,346 @@
 # COINjecture Distribution Guide
 
-This document provides comprehensive information about distributing COINjecture as standalone applications for non-developers.
+This document provides comprehensive instructions for distributing COINjecture packages across all platforms with proper code signing and notarization.
 
-## 📦 Application Packages
+## 📦 Package Overview
 
-COINjecture is available as standalone applications that require no Python installation or technical setup. Users can simply download and double-click to run.
+COINjecture v3.6.0 provides production-ready standalone applications for:
+- **macOS**: DMG installer with notarization
+- **Windows**: EXE installer with Authenticode signing
+- **Linux**: AppImage with GPG signature
 
-### 🍎 macOS Package
+## 🔐 Code Signing Requirements
 
-**File:** `COINjecture-3.4.0-macOS.dmg`
-**Size:** ~80-100 MB
-**Requirements:** macOS 10.14 or later
+### macOS Notarization
 
-**Installation:**
-1. Download the DMG file
-2. Double-click to mount the disk image
-3. Drag COINjecture to your Applications folder
-4. Double-click COINjecture in Applications to launch
+**Required:**
+- Apple Developer Account ($99/year)
+- Developer ID Application certificate
+- App-specific password for notarization
 
-**Features:**
-- Native macOS app bundle (.app)
-- Automatic code signing (when available)
-- Drag-and-drop installation
-- Integrated with macOS Launchpad and Spotlight
-
-### 🪟 Windows Package
-
-**File:** `COINjecture-3.4.0-Windows-Installer.exe`
-**Size:** ~70-90 MB
-**Requirements:** Windows 10 or later
-
-**Installation:**
-1. Download the installer
-2. Run the installer as Administrator
-3. Follow the installation wizard
-4. Launch from Start Menu or Desktop shortcut
-
-**Features:**
-- Professional Windows installer
-- Start Menu integration
-- Desktop shortcut creation
-- Automatic uninstaller
-- Windows registry integration
-
-### 🐧 Linux Package
-
-**File:** `COINjecture-3.4.0-Linux.AppImage`
-**Size:** ~75-95 MB
-**Requirements:** Modern Linux distribution (Ubuntu 18.04+, Fedora 30+, etc.)
-
-**Installation:**
-1. Download the AppImage file
-2. Make executable: `chmod +x COINjecture-3.4.0-Linux.AppImage`
-3. Double-click to run (or run from terminal)
-
-**Features:**
-- Universal Linux compatibility
-- No installation required
-- Portable (can run from USB drive)
-- Integrated with desktop environments
-
-## 🚀 User Experience
-
-### First Launch
-
-When users first launch COINjecture, they see:
-
-```
-╔════════════════════════════════════════════════════════════════════════════════════════════╗
-║                                                                                            ║
-║   ██████╗ ██████╗ ██╗███╗   ██╗     ██╗███████╗ ██████╗████████╗██╗   ██╗██████╗ ███████╗  ║
-║  ██╔════╝██╔═══██╗██║████╗  ██║     ██║██╔════╝██╔════╝╚══██╔══╝██║   ██║██╔══██╗██╔════╝  ║
-║  ██║     ██║   ██║██║██╔██╗ ██║     ██║█████╗  ██║        ██║   ██║   ██║██████╔╝█████╗    ║
-║  ██║     ██║   ██║██║██║╚██╗██║██   ██║██╔══╝  ██║        ██║   ██║   ██║██╔══██╗██╔══╝    ║
-║  ╚██████╗╚██████╔╝██║██║ ╚████║╚█████╔╝███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║███████╗  ║
-║   ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚════╝ ╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝  ║
-║                                                                                            ║
-║         🔬 Mathematical Proof-of-Work Mining                                               ║
-║         🌟 Transform blockchain mining into meaningful discovery                           ║
-║         💎 Every proof counts. Every discovery pays.                                       ║
-║                                                                                            ║
-╚════════════════════════════════════════════════════════════════════════════════════════════╝
-
-🚀 COINjecture v3.4.0 - Proof-of-Work Blockchain
-================================================================================
-Welcome to COINjecture! Choose how you'd like to get started:
-
-📋 Available Options:
-
-  [1] 🎯 Interactive Menu
-      • Guided interface for all operations
-      • Perfect for beginners
-      • Step-by-step workflows
-
-  [2] 💻 Direct CLI Terminal
-      • Full command-line access
-      • For advanced users
-      • Run any coinjecture command
-
-  [3] 📚 Quick Start Guides
-      • Mining tutorial
-      • Wallet setup
-      • Problem submission
-
-  [4] 🔧 Setup & Configuration
-      • Initialize node
-      • Configure settings
-      • Check system requirements
-
-  [5] ❓ Help & Documentation
-      • User guide
-      • Command reference
-      • Troubleshooting
-
-  [6] 🚪 Exit
-
-Enter your choice (1-6):
+**Environment Variables:**
+```bash
+export COINJECTURE_DEVELOPER_ID="Developer ID Application: YOUR_NAME"
+export COINJECTURE_TEAM_ID="YOUR_TEAM_ID"
+export COINJECTURE_APPLE_ID="your@email.com"
+export COINJECTURE_APP_PASSWORD="your-app-password"
 ```
 
-### Dual Interface Options
+**Process:**
+1. Sign the app bundle with Developer ID
+2. Submit to Apple for notarization
+3. Staple the notarization to the DMG
+4. Verify with `spctl --assess --verbose`
 
-**Option 1: Interactive Menu**
-- Perfect for beginners
-- Guided step-by-step workflows
-- No command-line knowledge required
-- Visual menus and clear instructions
+### Windows Authenticode
 
-**Option 2: Direct CLI Terminal**
-- Full command-line access
-- For advanced users and developers
-- Complete control over all operations
-- Access to all COINjecture commands
+**Required:**
+- Code signing certificate (.pfx file)
+- Windows SDK (includes signtool)
 
-## 🔧 Technical Details
-
-### What's Included
-
-Each package contains:
-- **Python Runtime**: Bundled Python 3.9+ interpreter
-- **All Dependencies**: Flask, cryptography, requests, etc.
-- **Source Code**: Complete COINjecture codebase
-- **Documentation**: README, user guides, quick reference
-- **Data Directory**: Automatic setup in user's home directory
-
-### System Requirements
-
-**Minimum:**
-- 512 MB RAM
-- 100 MB free disk space
-- Internet connection (for live API access)
-
-**Recommended:**
-- 2 GB RAM
-- 1 GB free disk space
-- Stable internet connection
-
-### Data Storage
-
-COINjecture automatically creates data directories:
-- **macOS**: `~/Library/Application Support/COINjecture/`
-- **Windows**: `%APPDATA%\COINjecture\`
-- **Linux**: `~/.coinjecture/`
-
-Contains:
-- Blockchain data
-- Wallet files
-- Configuration files
-- Log files
-- Cache data
-
-## 🌐 Network Integration
-
-### Live API Access
-
-All packages connect to the live COINjecture network:
-- **API Server**: http://167.172.213.70:5000
-- **Health Check**: http://167.172.213.70:5000/health
-- **Latest Block**: http://167.172.213.70:5000/v1/data/block/latest
-
-### Wallet Integration
-
-- **Create Wallets**: Generate Ed25519 key pairs
-- **Send Transactions**: Cryptographically signed transfers
-- **Check Balances**: Real-time balance updates
-- **Transaction History**: Complete transaction records
-
-### Mining Integration
-
-- **Automatic Rewards**: Miners receive tokens for solved problems
-- **Work Score Tracking**: Dynamic reward calculation
-- **Problem Submission**: Submit computational challenges
-- **Network Participation**: Join the peer-to-peer network
-
-## 📱 User Workflows
-
-### For Beginners
-
-1. **Download** the package for your operating system
-2. **Install** using the provided installer
-3. **Launch** COINjecture
-4. **Choose** "Interactive Menu" (Option 1)
-5. **Follow** the guided setup wizard
-6. **Start** mining or exploring the blockchain
-
-### For Advanced Users
-
-1. **Download** the package for your operating system
-2. **Install** using the provided installer
-3. **Launch** COINjecture
-4. **Choose** "Direct CLI Terminal" (Option 2)
-5. **Use** full command-line interface
-6. **Access** all advanced features
-
-### Common Tasks
-
-**Create a Wallet:**
-```
-coinjecture wallet-create my_wallet
+**Environment Variables:**
+```bash
+set COINJECTURE_CERT_FILE=certificate.pfx
+set COINJECTURE_CERT_PASSWORD=your-password
 ```
 
-**Start Mining:**
+**Process:**
+1. Sign executable with signtool
+2. Verify with `signtool verify /pa executable.exe`
+3. Test on Windows Defender
+
+### Linux GPG Signing
+
+**Required:**
+- GPG key pair
+- GPG installed on build system
+
+**Environment Variables:**
+```bash
+export COINJECTURE_GPG_KEY_ID="your-gpg-key-id"
+export COINJECTURE_GPG_PASSPHRASE="your-passphrase"
 ```
-coinjecture mine
-```
 
-**Check Balance:**
-```
-coinjecture wallet-balance <address>
-```
+**Process:**
+1. Create detached signature with GPG
+2. Verify with `gpg --verify package.sig package`
+3. Distribute both package and signature
 
-**Submit a Problem:**
-```
-coinjecture submit-problem --type subset_sum --bounty 100
-```
+## 🏗️ Build Process
 
-## 🔄 Updates and Maintenance
+### Prerequisites
 
-### Automatic Updates
-
-- Version checking on startup
-- Update notifications
-- Download links to latest releases
-- Migration assistance for data
-
-### Manual Updates
-
-1. Download new package version
-2. Install over existing installation
-3. Data automatically preserved
-4. Configuration maintained
-
-### Uninstallation
+**All Platforms:**
+- Python 3.8+
+- PyInstaller
+- Git
 
 **macOS:**
-- Drag COINjecture from Applications to Trash
-- Data remains in `~/Library/Application Support/COINjecture/`
+- Xcode Command Line Tools
+- codesign, xcrun notarytool
 
 **Windows:**
-- Use "Add or Remove Programs"
-- Or run uninstaller from Start Menu
-- Data remains in `%APPDATA%\COINjecture\`
+- Visual Studio or Windows SDK
+- signtool, makensis (optional)
 
 **Linux:**
-- Delete AppImage file
-- Data remains in `~/.coinjecture/`
+- appimagetool (optional)
+- GPG
 
-## 🆘 Support and Troubleshooting
+### Building Packages
 
-### Getting Help
+**1. Clone Repository:**
+```bash
+git clone https://github.com/beanapologist/COINjecture.git
+cd COINjecture
+```
 
-1. **Built-in Help**: Use Option 5 in the launcher menu
-2. **Command Help**: Run `coinjecture --help`
-3. **Documentation**: Included README and user guides
-4. **Online Resources**: GitHub repository and live API
+**2. Install Dependencies:**
+```bash
+pip install -r requirements.txt
+pip install pyinstaller
+```
+
+**3. Build for Current Platform:**
+```bash
+cd cli-packages
+python3 build_packages.py
+```
+
+**4. Build for Specific Platform:**
+```bash
+# macOS
+python3 build_packages.py --platform macOS
+
+# Windows  
+python3 build_packages.py --platform Windows
+
+# Linux
+python3 build_packages.py --platform Linux
+```
+
+**5. Build All Platforms:**
+```bash
+python3 build_packages.py --all
+```
+
+### Platform-Specific Builds
+
+#### macOS Build
+```bash
+cd cli-packages/macos/builders
+./build_macos.sh
+```
+
+**Output:**
+- `COINjecture-3.6.0-macOS.dmg` (signed and notarized)
+- `COINjecture-3.6.0-macOS.app` (signed app bundle)
+
+#### Windows Build
+```cmd
+cd cli-packages\windows\builders
+build_windows.bat
+```
+
+**Output:**
+- `COINjecture-3.6.0-Windows.exe` (signed executable)
+- `COINjecture-3.6.0-Windows-Installer.exe` (NSIS installer)
+
+#### Linux Build
+```bash
+cd cli-packages/linux/builders
+./build_linux.sh
+```
+
+**Output:**
+- `COINjecture-3.6.0-Linux.AppImage` (signed AppImage)
+- `COINjecture-3.6.0-Linux.AppImage.sig` (GPG signature)
+
+## 🧪 Testing Packages
+
+### Pre-Release Testing
+
+**1. Clean System Test:**
+- Test on fresh VM/container
+- No Python installation
+- Verify all dependencies bundled
+
+**2. Functionality Test:**
+- Launch application
+- Test network connectivity
+- Test mining functionality
+- Test background service installation
+
+**3. Security Test:**
+- Verify code signatures
+- Test on different OS versions
+- Check for malware false positives
+
+### Cross-Platform Testing
+
+**macOS:**
+- Test on macOS 10.14+ (Mojave, Catalina, Big Sur, Monterey, Ventura, Sonoma)
+- Verify notarization status
+- Test Gatekeeper acceptance
+
+**Windows:**
+- Test on Windows 10/11
+- Verify Authenticode signature
+- Test Windows Defender compatibility
+
+**Linux:**
+- Test on Ubuntu, Fedora, Arch, Debian
+- Verify AppImage execution
+- Test GPG signature verification
+
+## 📤 Distribution Methods
+
+### GitHub Releases
+
+**1. Create Release:**
+```bash
+git tag v3.6.0
+git push origin v3.6.0
+```
+
+**2. Upload Artifacts:**
+- Upload DMG, EXE, AppImage files
+- Include GPG signatures
+- Add release notes
+
+**3. Verify Downloads:**
+- Test download links
+- Verify file integrity
+- Check signature verification
+
+### Alternative Distribution
+
+**Direct Download:**
+- Host on CDN (CloudFlare, AWS S3)
+- Provide checksums
+- Include verification instructions
+
+**Package Managers:**
+- Homebrew (macOS)
+- Chocolatey (Windows)
+- Snap/Flatpak (Linux)
+
+## 🔍 Verification Instructions
+
+### For Users
+
+**macOS:**
+```bash
+# Check notarization
+spctl --assess --verbose COINjecture-3.6.0-macOS.dmg
+
+# Verify signature
+codesign --verify --verbose COINjecture-3.6.0-macOS.app
+```
+
+**Windows:**
+```cmd
+# Verify signature
+signtool verify /pa COINjecture-3.6.0-Windows.exe
+```
+
+**Linux:**
+```bash
+# Verify GPG signature
+gpg --verify COINjecture-3.6.0-Linux.AppImage.sig COINjecture-3.6.0-Linux.AppImage
+
+# Check AppImage
+./COINjecture-3.6.0-Linux.AppImage --appimage-extract-and-run --help
+```
+
+### For Developers
+
+**Verify Build Integrity:**
+```bash
+# Check file sizes
+ls -lh dist/packages/
+
+# Verify signatures
+python3 cli-packages/shared/signing/sign_packages.py verify package_path
+
+# Test functionality
+./package --help
+```
+
+## 🚀 Release Checklist
+
+### Pre-Release
+- [ ] All tests passing
+- [ ] Code signing configured
+- [ ] Version numbers updated
+- [ ] Changelog updated
+- [ ] Documentation updated
+
+### Build Process
+- [ ] Clean build environment
+- [ ] All dependencies installed
+- [ ] Environment variables set
+- [ ] Build all platforms
+- [ ] Verify signatures
+- [ ] Test on clean systems
+
+### Post-Release
+- [ ] Upload to GitHub Releases
+- [ ] Update download links
+- [ ] Announce release
+- [ ] Monitor user feedback
+- [ ] Track download statistics
+
+## 🛠️ Troubleshooting
 
 ### Common Issues
 
-**App Won't Launch:**
-- Check system requirements
+**Build Failures:**
+- Check Python version (3.8+ required)
+- Verify PyInstaller installation
+- Check file permissions
 - Ensure sufficient disk space
-- Try running as Administrator (Windows)
 
-**Network Connection Issues:**
-- Check internet connection
-- Verify firewall settings
-- Test API connectivity
+**Signing Issues:**
+- Verify certificate validity
+- Check environment variables
+- Test signing tools
+- Verify network connectivity (notarization)
 
-**Performance Issues:**
-- Close other applications
-- Check available RAM
-- Monitor disk space
+**Package Issues:**
+- Test on clean system
+- Check bundled dependencies
+- Verify file permissions
+- Test network connectivity
 
-### Log Files
+### Support
 
-Log files are automatically created in the data directory:
-- `coinjecture.log` - Main application log
-- `mining.log` - Mining operations
-- `network.log` - Network communications
-- `wallet.log` - Wallet operations
+**Documentation:**
+- README.md - Basic usage
+- USER_GUIDE.md - Detailed instructions
+- QUICK_REFERENCE.md - Command reference
 
-## 🎯 Distribution Strategy
+**Community:**
+- GitHub Issues - Bug reports
+- GitHub Discussions - Questions
+- Discord - Real-time support
 
-### Release Process
+## 📊 Monitoring
 
-1. **Build Packages**: Run build scripts for all platforms
-2. **Test Packages**: Verify functionality on clean systems
-3. **Create Release**: Upload to GitHub Releases
-4. **Update Documentation**: Update download links
-5. **Announce Release**: Notify users of new version
+### Analytics
+- Download statistics
+- Platform distribution
+- User feedback
+- Error reports
 
-### Download Links
-
-**GitHub Releases:**
-- https://github.com/beanapologist/COINjecture/releases
-
-**Direct Downloads:**
-- macOS: `COINjecture-3.4.0-macOS.dmg`
-- Windows: `COINjecture-3.4.0-Windows-Installer.exe`
-- Linux: `COINjecture-3.4.0-Linux.AppImage`
-
-### Marketing Materials
-
-- **Screenshots**: Application interface and workflows
-- **Demo Videos**: Installation and usage tutorials
-- **Documentation**: User guides and quick start materials
-- **Community**: GitHub discussions and issue tracking
-
-## 🚀 Future Enhancements
-
-### Planned Features
-
-- **Auto-Updates**: Built-in update mechanism
-- **GUI Interface**: Graphical user interface option
-- **Mobile Apps**: iOS and Android applications
-- **Cloud Integration**: Cloud storage and synchronization
-- **Advanced Analytics**: Mining performance dashboards
-
-### Community Contributions
-
-- **Translations**: Multi-language support
-- **Themes**: Customizable interface themes
-- **Plugins**: Third-party extension system
-- **Documentation**: Community-contributed guides
+### Metrics
+- Package size optimization
+- Build time tracking
+- Test coverage
+- Performance benchmarks
 
 ---
 
 **Ready to distribute COINjecture to the world!** 🌍
 
-The standalone packages provide a seamless experience for non-developers while maintaining full functionality for advanced users. Users can start mining, creating wallets, and participating in the COINjecture network with just a few clicks.
+The distribution process ensures that users receive trusted, signed packages that work seamlessly across all platforms while maintaining security and integrity.

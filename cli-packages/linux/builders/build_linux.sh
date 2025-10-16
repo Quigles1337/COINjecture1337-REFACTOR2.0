@@ -77,7 +77,7 @@ fi
 
 # Create AppImage structure
 echo "📦 Creating AppImage..."
-APPIMAGE_NAME="COINjecture-3.5.0-Linux.AppImage"
+APPIMAGE_NAME="COINjecture-3.6.0-Linux.AppImage"
 APPIMAGE_PATH="dist/packages/$APPIMAGE_NAME"
 
 # Create AppImage directory structure
@@ -111,7 +111,7 @@ chmod +x "$APPIMAGE_DIR/AppRun"
 cat > "$APPIMAGE_DIR/AppImage.yml" << 'EOF'
 api-version: 1
 name: COINjecture
-version: 3.5.0
+version: 3.6.0
 exec: usr/bin/COINjecture
 icon: coinjecture
 categories: Network;Finance;
@@ -138,7 +138,7 @@ else
     echo "⚠️ appimagetool not found, creating portable executable instead..."
     
     # Create a simple portable executable
-    PORTABLE_NAME="COINjecture-3.5.0-Linux"
+    PORTABLE_NAME="COINjecture-3.6.0-Linux"
     PORTABLE_PATH="dist/packages/$PORTABLE_NAME"
     
     cp dist/COINjecture/COINjecture "$PORTABLE_PATH"
@@ -152,6 +152,25 @@ else
     
     # Clean up
     rm -rf "$APPIMAGE_DIR"
+fi
+
+# GPG signing (optional)
+echo "🔐 GPG signing..."
+if command -v gpg &> /dev/null; then
+    if [ -n "$COINJECTURE_GPG_KEY_ID" ]; then
+        echo "   Signing with GPG key: $COINJECTURE_GPG_KEY_ID"
+        if [ -f "$APPIMAGE_PATH" ]; then
+            gpg --detach-sign --armor --local-user "$COINJECTURE_GPG_KEY_ID" "$APPIMAGE_PATH"
+            echo "✅ AppImage signed: ${APPIMAGE_PATH}.sig"
+        elif [ -f "$PORTABLE_PATH" ]; then
+            gpg --detach-sign --armor --local-user "$COINJECTURE_GPG_KEY_ID" "$PORTABLE_PATH"
+            echo "✅ Executable signed: ${PORTABLE_PATH}.sig"
+        fi
+    else
+        echo "⚠️  COINJECTURE_GPG_KEY_ID not set, skipping GPG signing"
+    fi
+else
+    echo "⚠️  GPG not found, skipping GPG signing"
 fi
 
 # Show file size

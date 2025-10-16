@@ -47,8 +47,8 @@ echo # For more details about fixed file info 'ffi' see:
 echo # http://msdn.microsoft.com/en-us/library/ms646997.aspx
 echo VSVersionInfo^(
 echo   ffi=FixedFileInfo^(
-echo     filevers=^(3,4,0,0^),
-echo     prodvers=^(3,4,0,0^),
+echo     filevers=^(3,6,0,0^),
+echo     prodvers=^(3,6,0,0^),
 echo     mask=0x3f,
 echo     flags=0x0,
 echo     OS=0x4,
@@ -63,12 +63,12 @@ echo       StringTable^(
 echo         u'040904B0',
 echo         [StringStruct^(u'CompanyName', u'COINjecture'^),
 echo         StringStruct^(u'FileDescription', u'COINjecture - Proof-of-Work Blockchain'^),
-echo         StringStruct^(u'FileVersion', u'3.4.0'^),
+echo         StringStruct^(u'FileVersion', u'3.6.0'^),
 echo         StringStruct^(u'InternalName', u'COINjecture'^),
 echo         StringStruct^(u'LegalCopyright', u'Copyright ^(C^) 2025 COINjecture'^),
 echo         StringStruct^(u'OriginalFilename', u'COINjecture.exe'^),
 echo         StringStruct^(u'ProductName', u'COINjecture'^),
-echo         StringStruct^(u'ProductVersion', u'3.4.0'^)])
+echo         StringStruct^(u'ProductVersion', u'3.6.0'^)])
 echo       ]^), 
 echo     VarFileInfo^([VarStruct^(u'Translation', [1033, 1200]^)])
 echo   ]
@@ -100,7 +100,7 @@ if not exist "dist\COINjecture\COINjecture.exe" (
 
 REM Copy executable to packages directory
 echo 📦 Creating Windows package...
-set EXE_NAME=COINjecture-3.5.0-Windows.exe
+set EXE_NAME=COINjecture-3.6.0-Windows.exe
 set EXE_PATH=dist\packages\%EXE_NAME%
 
 copy "dist\COINjecture\COINjecture.exe" "%EXE_PATH%"
@@ -123,7 +123,7 @@ if not errorlevel 1 (
     echo !define COMPANYNAME "COINjecture"
     echo !define DESCRIPTION "Proof-of-Work Blockchain"
     echo !define VERSIONMAJOR 3
-    echo !define VERSIONMINOR 4
+    echo !define VERSIONMINOR 6
     echo !define VERSIONBUILD 0
     echo !define HELPURL "https://github.com/beanapologist/COINjecture"
     echo !define UPDATEURL "https://github.com/beanapologist/COINjecture"
@@ -133,7 +133,7 @@ if not errorlevel 1 (
     echo RequestExecutionLevel admin
     echo InstallDir "$PROGRAMFILES\${APPNAME}"
     echo Name "${COMPANYNAME} - ${APPNAME}"
-    echo outFile "dist\packages\COINjecture-3.4.0-Windows-Installer.exe"
+    echo outFile "dist\packages\COINjecture-3.6.0-Windows-Installer.exe"
     echo icon "packaging\assets\icon.ico"
     echo installDirRegKey HKLM "Software\${COMPANYNAME}\${APPNAME}" ""
     echo page directory
@@ -184,6 +184,25 @@ if not errorlevel 1 (
 ) else (
     echo ⚠️ NSIS not found, skipping installer creation
     echo 💡 Install NSIS from https://nsis.sourceforge.io/ to create installers
+)
+
+REM Code signing (optional)
+echo 🔐 Code signing...
+where signtool >nul 2>&1
+if not errorlevel 1 (
+    if defined COINJECTURE_CERT_FILE (
+        echo    Signing with certificate: %COINJECTURE_CERT_FILE%
+        signtool sign /f "%COINJECTURE_CERT_FILE%" /p "%COINJECTURE_CERT_PASSWORD%" /tr "http://timestamp.digicert.com" /td sha256 "%EXE_PATH%"
+        if not errorlevel 1 (
+            echo ✅ Code signing completed
+        ) else (
+            echo ⚠️ Code signing failed
+        )
+    ) else (
+        echo ⚠️ COINJECTURE_CERT_FILE not set, skipping code signing
+    )
+) else (
+    echo ⚠️ signtool not found, skipping code signing
 )
 
 REM Show file size

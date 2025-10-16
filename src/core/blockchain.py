@@ -731,6 +731,37 @@ class Block:
 
         return True
 
+    def to_dict(self) -> dict:
+        """Convert block to dictionary for JSON serialization."""
+        return {
+            'index': self.index,
+            'timestamp': self.timestamp,
+            'previous_hash': self.previous_hash,
+            'transactions': [tx.to_dict() if hasattr(tx, 'to_dict') else tx for tx in self.transactions],
+            'merkle_root': self.merkle_root,
+            'problem': self.problem,
+            'solution': self.solution,
+            'complexity': {
+                'time_solve_O': self.complexity.time_solve_O,
+                'time_solve_Omega': self.complexity.time_solve_Omega,
+                'time_solve_Theta': self.complexity.time_solve_Theta,
+                'time_verify_O': self.complexity.time_verify_O,
+                'time_verify_Omega': self.complexity.time_verify_Omega,
+                'time_verify_Theta': self.complexity.time_verify_Theta,
+                'space_solve_O': self.complexity.space_solve_O,
+                'space_solve_Omega': self.complexity.space_solve_Omega,
+                'space_solve_Theta': self.complexity.space_solve_Theta,
+                'space_verify_O': self.complexity.space_verify_O,
+                'space_verify_Omega': self.complexity.space_verify_Omega,
+                'space_verify_Theta': self.complexity.space_verify_Theta,
+                'solution_quality': self.complexity.solution_quality
+            },
+            'mining_capacity': self.mining_capacity.value if hasattr(self.mining_capacity, 'value') else str(self.mining_capacity),
+            'cumulative_work_score': self.cumulative_work_score,
+            'block_hash': self.block_hash,
+            'offchain_cid': self.offchain_cid
+        }
+
 
 def verify_complexity_metrics(complexity: ComputationalComplexity) -> bool:
     """

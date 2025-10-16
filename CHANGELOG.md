@@ -5,6 +5,59 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.1] - 2025-10-16
+
+### Fixed
+- **Network Submission**: Improved error handling for block submission to network
+- **CLI Mining**: Better user experience when droplet API is not yet updated
+- **Error Messages**: Clear feedback when network submission endpoint expects different format
+- **Mining Success**: Mining is now considered successful even when network submission fails due to API version mismatch
+
+### Technical Details
+- **`src/cli.py`**: Enhanced `_submit_block_to_network()` method with proper HTTP status code handling
+- **Error Handling**: Added specific handling for HTTP 422 (INVALID) responses
+- **User Experience**: Mining success is reported even when network submission fails due to API version mismatch
+- **Network Integration**: Ready for droplet update with new `/v1/ingest/block` endpoint
+
+### Impact
+- **Mining Experience**: Users get clear feedback about mining success and network status
+- **Development**: Local mining works perfectly while waiting for droplet API update
+- **Network Ready**: CLI is prepared for full network integration once droplet is updated
+
+#buildinginpublic #networkintegration #mining #errorhandling
+
+## [3.6.0] - 2025-10-16
+
+### Added
+- **Block Submission API**: New `/v1/ingest/block` endpoint in faucet server to accept mined blocks from CLI clients
+- **Network Block Submission**: CLI now automatically submits mined blocks to the live network via API
+- **Enhanced Launcher**: Auto-connect to network, network status display, and background service installation options
+- **Background Service Support**: Cross-platform service installation for macOS (LaunchAgent), Windows (Task Scheduler), and Linux (systemd)
+- **Code Signing**: Complete signing infrastructure for macOS (notarization), Windows (Authenticode), and Linux (GPG)
+- **Production-Ready Packages**: Standalone installers with network integration and automatic block submission
+
+### Changed
+- **CLI Mining**: Direct block mining with automatic network submission instead of local-only mining
+- **Launcher Interface**: Enhanced with network connectivity checks and service management options
+- **Build Process**: All platform build scripts updated with signing support and version 3.6.0
+
+### Technical Details
+- **`src/api/faucet_server.py`**: Added `/v1/ingest/block` endpoint with block validation and storage
+- **`src/cli.py`**: Added `_submit_block_to_network()` method and `_mine_single_block()` for direct mining
+- **`src/core/blockchain.py`**: Added `to_dict()` method to Block class for JSON serialization
+- **`cli-packages/shared/launcher/launcher_app.py`**: Enhanced with network status and service installation
+- **`cli-packages/shared/services/install_service.py`**: Cross-platform background service installer
+- **`cli-packages/shared/signing/sign_packages.py`**: Complete code signing infrastructure
+- **Build Scripts**: Updated all platform build scripts with signing and version 3.6.0
+
+### Impact
+- **Live Network Integration**: CLI now connects to and submits blocks to the live COINjecture network
+- **Production Deployment**: Ready-to-distribute packages with proper code signing and background services
+- **User Experience**: One-click installation with automatic network connectivity and background mining
+- **Developer Experience**: Complete signing workflow for trusted package distribution
+
+#buildinginpublic #networkintegration #productionsign #backgroundservices #blockchain
+
 ## [3.5.2] - 2025-10-16
 
 ### Added

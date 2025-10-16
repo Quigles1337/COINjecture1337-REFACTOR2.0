@@ -42,9 +42,26 @@ def show_logo():
 def show_welcome():
     """Display welcome message and version info."""
     print("\n" + "="*80)
-    print("🚀 COINjecture v3.4.0 - Proof-of-Work Blockchain")
+    print("🚀 COINjecture v3.6.0 - Proof-of-Work Blockchain")
     print("="*80)
     print("Welcome to COINjecture! Choose how you'd like to get started:")
+    print()
+    
+    # Check network connectivity
+    try:
+        import requests
+        response = requests.get("http://167.172.213.70:5000/health", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            print(f"🌐 Network Status: ✅ Connected to COINjecture Network")
+            print(f"   Latest Block: #{data.get('cache', {}).get('latest_block_index', 'unknown')}")
+            print(f"   API Server: http://167.172.213.70:5000")
+        else:
+            print(f"🌐 Network Status: ⚠️  Connected but API error (HTTP {response.status_code})")
+    except Exception as e:
+        print(f"🌐 Network Status: ❌ Offline mode ({str(e)[:50]}...)")
+        print("   You can still use COINjecture in offline mode")
+    
     print()
 
 def show_menu():
@@ -71,23 +88,33 @@ def show_menu():
     print("      • Configure settings")
     print("      • Check system requirements")
     print()
-    print("  [5] ❓ Help & Documentation")
+    print("  [5] 🌐 Connect to Network")
+    print("      • Test network connection")
+    print("      • Configure API endpoint")
+    print("      • View network status")
+    print()
+    print("  [6] 🔧 Install Background Service")
+    print("      • Auto-mining service")
+    print("      • System startup integration")
+    print("      • Background mining")
+    print()
+    print("  [7] ❓ Help & Documentation")
     print("      • User guide")
     print("      • Command reference")
     print("      • Troubleshooting")
     print()
-    print("  [6] 🚪 Exit")
+    print("  [8] 🚪 Exit")
     print()
 
 def get_user_choice():
     """Get user's menu choice with validation."""
     while True:
         try:
-            choice = input("Enter your choice (1-6): ").strip()
-            if choice in ['1', '2', '3', '4', '5', '6']:
+            choice = input("Enter your choice (1-8): ").strip()
+            if choice in ['1', '2', '3', '4', '5', '6', '7', '8']:
                 return int(choice)
             else:
-                print("❌ Please enter a number between 1 and 6.")
+                print("❌ Please enter a number between 1 and 8.")
         except KeyboardInterrupt:
             print("\n👋 Goodbye!")
             sys.exit(0)
@@ -324,6 +351,99 @@ def show_help_documentation():
     print()
     input("Press Enter to continue...")
 
+def show_network_connection():
+    """Show network connection options."""
+    print("🌐 Network Connection")
+    print("="*50)
+    print()
+    print("Available options:")
+    print()
+    print("  [1] Test Network Connection")
+    print("  [2] Configure API Endpoint")
+    print("  [3] View Network Status")
+    print("  [4] ← Back to Main Menu")
+    print()
+    
+    while True:
+        try:
+            choice = input("Choose network option (1-4): ").strip()
+            if choice == '1':
+                print("🔍 Testing network connection...")
+                try:
+                    import requests
+                    response = requests.get("http://167.172.213.70:5000/health", timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        print("✅ Network connection successful!")
+                        print(f"   Status: {data.get('status', 'unknown')}")
+                        print(f"   Latest Block: #{data.get('cache', {}).get('latest_block_index', 'unknown')}")
+                    else:
+                        print(f"⚠️  Network connection failed (HTTP {response.status_code})")
+                except Exception as e:
+                    print(f"❌ Network connection failed: {e}")
+                break
+            elif choice == '2':
+                print("⚙️  Configure API Endpoint")
+                new_url = input("Enter new API URL (default: http://167.172.213.70:5000): ").strip()
+                if new_url:
+                    print(f"✅ API endpoint configured: {new_url}")
+                else:
+                    print("✅ Using default API endpoint: http://167.172.213.70:5000")
+                break
+            elif choice == '3':
+                print("📊 Network Status")
+                try:
+                    import requests
+                    response = requests.get("http://167.172.213.70:5000/health", timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        print(f"   Status: {data.get('status', 'unknown')}")
+                        print(f"   Latest Block: #{data.get('cache', {}).get('latest_block_index', 'unknown')}")
+                        print(f"   API Server: http://167.172.213.70:5000")
+                    else:
+                        print(f"   Status: Error (HTTP {response.status_code})")
+                except Exception as e:
+                    print(f"   Status: Offline ({str(e)[:50]}...)")
+                break
+            elif choice == '4':
+                break
+            else:
+                print("❌ Please enter 1-4.")
+        except KeyboardInterrupt:
+            break
+    
+    input("Press Enter to continue...")
+
+def show_background_service():
+    """Show background service installation options."""
+    print("🔧 Background Service Installation")
+    print("="*50)
+    print()
+    print("This will install COINjecture as a background service that:")
+    print("• Automatically starts mining when your computer starts")
+    print("• Runs continuously in the background")
+    print("• Submits mined blocks to the network")
+    print()
+    
+    install = input("Install background service? (y/N): ").strip().lower()
+    if install in ['y', 'yes']:
+        print("🔧 Installing background service...")
+        try:
+            # Import the service installer
+            from services.install_service import install_background_service
+            success = install_background_service()
+            if success:
+                print("✅ Background service installed successfully!")
+                print("   Service will start automatically on system boot")
+            else:
+                print("❌ Failed to install background service")
+        except Exception as e:
+            print(f"❌ Error installing service: {e}")
+    else:
+        print("⏭️  Background service installation skipped")
+    
+    input("Press Enter to continue...")
+
 def main():
     """Main launcher application."""
     # Clear screen
@@ -346,8 +466,12 @@ def main():
         elif choice == 4:
             show_setup_configuration()
         elif choice == 5:
-            show_help_documentation()
+            show_network_connection()
         elif choice == 6:
+            show_background_service()
+        elif choice == 7:
+            show_help_documentation()
+        elif choice == 8:
             print("👋 Thank you for using COINjecture!")
             print("Happy mining! ⛏️")
             break

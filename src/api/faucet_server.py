@@ -473,6 +473,109 @@ class FaucetAPI:
                     "message": str(e)
                 }), 500
         
+        @self.app.route('/v1/ingest/block', methods=['POST'])
+        @self.limiter.limit("10 per minute")
+        def ingest_block():
+            """Accept mined blocks from CLI clients."""
+            try:
+                data = request.get_json()
+                if not data or 'block' not in data:
+                    return jsonify({
+                        "status": "error",
+                        "error": "Missing block data"
+                    }), 400
+                
+                block_data = data['block']
+                peer_id = data.get('peer_id', 'unknown')
+                signature = data.get('signature', None)
+                
+                # Import required modules
+                from core.blockchain import Block, Transaction
+                from consensus import ConsensusEngine, ConsensusConfig
+                from storage import StorageManager, StorageConfig, NodeRole, PruningMode
+                
+                # Create storage manager
+                storage_config = StorageConfig(
+                    data_dir="data",
+                    role=NodeRole.FULL,
+                    pruning_mode=PruningMode.FULL,
+                    ipfs_api_url="http://localhost:5001"
+                )
+                storage_manager = StorageManager(storage_config)
+                
+                # Create consensus engine
+                consensus_config = ConsensusConfig()
+                consensus = ConsensusEngine(consensus_config, storage_manager, None)
+                
+                # Validate block structure
+                required_fields = ['index', 'timestamp', 'previous_hash', 'transactions', 'merkle_root', 'block_hash']
+                for field in required_fields:
+                    if field not in block_data:
+                        return jsonify({
+                            "status": "error",
+                            "error": f"Missing required field: {field}"
+                        }), 400
+                
+                # Convert transactions back to Transaction objects
+                transactions = []
+                for tx_data in block_data.get('transactions', []):
+                    if isinstance(tx_data, dict):
+                        tx = Transaction.from_dict(tx_data)
+                        transactions.append(tx)
+                    else:
+                        transactions.append(tx_data)
+                
+                # Create Block object
+                block = Block(
+                    index=block_data['index'],
+                    timestamp=block_data['timestamp'],
+                    previous_hash=block_data['previous_hash'],
+                    transactions=transactions,
+                    merkle_root=block_data['merkle_root'],
+                    block_hash=block_data['block_hash'],
+                    problem=block_data.get('problem'),
+                    solution=block_data.get('solution'),
+                    complexity=block_data.get('complexity'),
+                    mining_capacity=block_data.get('mining_capacity'),
+                    cumulative_work_score=block_data.get('cumulative_work_score', 0),
+                    offchain_cid=block_data.get('offchain_cid')
+                )
+                
+                # Validate block
+                if not consensus.validate_header(block):
+                    return jsonify({
+                        "status": "error",
+                        "error": "Block validation failed"
+                    }), 400
+                
+                # Store block
+                try:
+                    storage_manager.store_block(block)
+                    
+                    # Update cache
+                    self.cache_manager.update_cache()
+                    
+                    return jsonify({
+                        "status": "success",
+                        "message": f"Block {block.index} accepted",
+                        "block_hash": block.block_hash,
+                        "index": block.index
+                    })
+                    
+                except Exception as e:
+                    return jsonify({
+                        "status": "error",
+                        "error": "Failed to store block",
+                        "message": str(e)
+                    }), 500
+                    
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "error": "Internal server error",
+                    "message": str(e)
+                }), 500
+        
         # Error handlers
         @self.app.errorhandler(429)
         def ratelimit_handler(e):
