@@ -84,7 +84,7 @@ cd "$PROJECT_ROOT"
 rm -rf build/ dist/COINjecture/
 
 # Run PyInstaller
-pyinstaller cli-packages/shared/specs/coinjecture.spec
+python3 -m PyInstaller cli-packages/shared/specs/coinjecture.spec
 
 # Check if build was successful
 if [ ! -d "dist/COINjecture" ]; then

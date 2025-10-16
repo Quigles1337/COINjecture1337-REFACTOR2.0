@@ -5,6 +5,28 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.3] - 2025-10-16
+
+### Fixed
+- **urllib3 OpenSSL Warning**: Eliminated OpenSSL compatibility warning in macOS CLI package
+- **CLI Package Structure**: Organized CLI packages in proper directory structure
+- **Clean Build**: macOS executable now builds without warnings or errors
+- **Package Organization**: All CLI packages stored in `cli-packages/dist/` directory
+
+### Technical Details
+- **`requirements.txt`**: Updated urllib3 constraint to `>=1.26.0,<2.0.0` for OpenSSL compatibility
+- **`cli-packages/dist/`**: Created organized directory structure for all platform packages
+- **macOS Package**: `COINjecture-macOS-v3.6.3-fixed.zip` (39.1 MB) - warning-free executable
+- **Build Process**: PyInstaller now produces clean builds without urllib3 warnings
+
+### Impact
+- **User Experience**: No more confusing OpenSSL warnings for end users
+- **Professional Quality**: Clean, professional CLI packages ready for distribution
+- **Cross-Platform Ready**: Organized structure ready for Windows and Linux packages
+- **Production Ready**: Warning-free executables suitable for public release
+
+#buildinginpublic #cli #packaging #urllib3 #openssl
+
 ## [3.6.2] - 2025-10-16
 
 ### Fixed

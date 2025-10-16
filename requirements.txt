@@ -3,6 +3,7 @@
 
 # HTTP client for IPFS API integration and CLI telemetry
 requests>=2.25.0
+urllib3>=1.26.0,<2.0.0
 
 # Cryptographic operations for wallet and transaction signing
 cryptography>=41.0.0
