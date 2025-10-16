@@ -6,10 +6,10 @@ Implements the specification from FAUCET_API.README.md.
 """
 
 import time
-from flask import Flask, jsonify, request, Response
-from flask_cors import CORS
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from flask import Flask, jsonify, request, Response  # type: ignore
+from flask_cors import CORS  # type: ignore
+from flask_limiter import Limiter  # type: ignore
+from flask_limiter.util import get_remote_address  # type: ignore
 from typing import Dict, Any, Optional
 import sys
 import os
