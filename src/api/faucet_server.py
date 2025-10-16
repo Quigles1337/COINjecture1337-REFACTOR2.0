@@ -475,7 +475,7 @@ class FaucetAPI:
         
         @self.app.route('/v1/ingest/block', methods=['POST'])
         @self.limiter.limit("10 per minute")
-        def ingest_block():
+        def ingest_block_submission():
             """Accept mined blocks from CLI clients."""
             try:
                 data = request.get_json()
