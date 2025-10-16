@@ -5,6 +5,112 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2025-10-15
+
+### Added
+- **Cross-Platform CLI Application Packages** - Complete standalone application distribution system
+- **Interactive Launcher Application** - Beautiful dual-mode interface for beginners and advanced users
+- **Professional Installers** - Native installers for macOS (DMG), Windows (EXE + NSIS), and Linux (AppImage)
+- **Zero-Dependency Distribution** - Standalone executables requiring no Python installation
+- **Comprehensive Build System** - Automated packaging for all three platforms
+
+### Technical Details
+- **CLI Packages Directory**: Organized `cli-packages/` structure with platform-specific builders
+- **PyInstaller Integration**: Complete bundling of Python runtime and all dependencies
+- **Launcher Application**: Interactive menu system with COINjecture branding
+- **Build Orchestration**: Master build script with platform-specific automation
+- **Asset Management**: Icons, metadata, and configuration for all platforms
+
+### New Features
+- **Dual Interface**: Interactive menu for beginners + direct CLI for advanced users
+- **Native Packaging**: Platform-specific installers with proper system integration
+- **Automatic Setup**: Data directories and configuration created automatically
+- **Live Network Integration**: Built-in connection to live COINjecture API
+- **Professional Distribution**: Ready for GitHub Releases and user distribution
+
+### Build System
+- **Master Builder**: `cli-packages/shared/build_packages.py` - Orchestrates all builds
+- **Platform Builders**: 
+  - `cli-packages/macos/builders/build_macos.sh` - macOS DMG creation
+  - `cli-packages/windows/builders/build_windows.bat` - Windows installer
+  - `cli-packages/linux/builders/build_linux.sh` - Linux AppImage
+- **PyInstaller Spec**: `cli-packages/shared/specs/coinjecture.spec` - Bundling configuration
+- **Launcher App**: `cli-packages/shared/launcher/launcher_app.py` - Main entry point
+
+### Distribution Packages
+- **macOS**: `COINjecture-3.5.0-macOS.dmg` - Drag-and-drop installer
+- **Windows**: `COINjecture-3.5.0-Windows-Installer.exe` - Professional installer
+- **Linux**: `COINjecture-3.5.0-Linux.AppImage` - Universal Linux package
+
+### Documentation
+- **CLI Packages README**: Complete build and distribution guide
+- **Updated DOWNLOAD_PACKAGES.md**: New standalone application options
+- **DISTRIBUTION.md**: Comprehensive distribution strategy and user experience
+
+### Impact
+- **Non-Developer Access**: Users can now download and run COINjecture without technical setup
+- **Professional Distribution**: Ready for mass distribution and user adoption
+- **Cross-Platform Support**: Native experience on macOS, Windows, and Linux
+- **Dual User Experience**: Both guided and advanced interfaces available
+- **Zero Installation Friction**: No Python, dependencies, or technical knowledge required
+
+#buildinginpublic #cliapplications #crossplatform #distribution #packaging #userfriendly
+
+## [3.4.0] - 2025-10-15
+
+### Added
+- **Cryptographic Wallet System** - Complete Ed25519-based wallet implementation with public/private key pairs
+- **Transaction System** - Full transaction support with cryptographic signatures and validation
+- **Blockchain State Management** - Comprehensive state tracking for balances, transaction pool, and history
+- **Automatic Miner Rewards** - Miners now automatically receive tokens when blocks are mined
+- **API Endpoints** - New wallet and transaction endpoints in the faucet server
+- **CLI Commands** - Wallet creation, balance checking, and transaction management via command line
+
+### Technical Details
+- **Wallet Implementation**: Ed25519 key pairs with SHA-256 address derivation (CJ prefix)
+- **Transaction Signing**: Cryptographic signatures using Ed25519 for transaction authenticity
+- **State Management**: Persistent blockchain state with balance tracking and transaction history
+- **Reward Integration**: Automatic crediting of block rewards to miner wallets
+- **API Integration**: RESTful endpoints for wallet and transaction operations
+- **CLI Integration**: Command-line tools for wallet and transaction management
+
+### New Features
+- **Wallet Creation**: Generate new wallets with unique addresses and key pairs
+- **Balance Tracking**: Real-time balance updates for all wallet addresses
+- **Transaction Pool**: Pending transaction management with validation
+- **Transaction History**: Complete transaction history per address
+- **Miner Rewards**: Automatic token distribution to miners based on work scores
+- **Address Validation**: COINjecture address format validation (CJ prefix)
+
+### API Endpoints
+- `POST /v1/wallet/create` - Create new wallet
+- `GET /v1/wallet/{address}/balance` - Get wallet balance
+- `GET /v1/wallet/{address}/transactions` - Get transaction history
+- `POST /v1/transaction/send` - Submit transaction to pool
+- `GET /v1/transaction/pending` - View pending transactions
+- `GET /v1/transaction/{tx_id}` - Get transaction details
+
+### CLI Commands
+- `coinjecture wallet-create <name>` - Create wallet
+- `coinjecture wallet-list` - List wallets
+- `coinjecture wallet-balance <address>` - Check balance
+- `coinjecture transaction-send <from> <to> <amount>` - Send tokens
+- `coinjecture transaction-history <address>` - View history
+- `coinjecture transaction-pending` - View pending transactions
+
+### Dependencies
+- **cryptography>=41.0.0** - For Ed25519 key pairs and transaction signing
+
+### Impact
+- **Complete Wallet System**: Users can now create wallets, manage balances, and send transactions
+- **Miner Incentives**: Miners automatically receive rewards for their computational work
+- **Transaction Security**: All transactions are cryptographically signed and validated
+- **State Persistence**: Blockchain state is maintained across sessions
+- **API Access**: Full programmatic access to wallet and transaction functionality
+- **CLI Management**: Easy command-line management of wallets and transactions
+
+#buildinginpublic #walletsystem #transactions #cryptography #minerrewards #blockchainstate
+
 ## [3.3.10] - 2025-10-15
 
 ### Fixed

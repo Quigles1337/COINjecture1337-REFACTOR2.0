@@ -97,7 +97,7 @@ class DynamicWorkScoreTokenomics:
     # EVERYTHING ELSE IS DYNAMIC
     # ============================================
     
-    def __init__(self):
+    def __init__(self, blockchain_state=None):
         # Track actual network behavior
         self.work_score_history: list[WorkScoreRecord] = []
         self.capacity_performance: dict[ProblemTier, CapacityMetrics] = {}
@@ -109,6 +109,9 @@ class DynamicWorkScoreTokenomics:
         # Dynamic block time emerges from verification performance
         self.recent_verification_times: deque = deque(maxlen=100)
         self.recent_solve_times: deque = deque(maxlen=100)
+        
+        # Blockchain state for wallet integration
+        self.blockchain_state = blockchain_state
         
     def calculate_block_reward(self,
                               block: Block,
@@ -217,8 +220,8 @@ class DynamicWorkScoreTokenomics:
         else:
             return 1.0  # No bonus/penalty for balanced representation
     
-    def record_block(self, block: Block, complexity: ComputationalComplexity, reward: float):
-        """Record block metrics for dynamic adjustment"""
+    def record_block(self, block: Block, complexity: ComputationalComplexity, reward: float, miner_address: str = None):
+        """Record block metrics for dynamic adjustment and credit rewards to miner"""
         
         block_work_score = calculate_computational_work_score(complexity)
         
@@ -247,6 +250,25 @@ class DynamicWorkScoreTokenomics:
         # Update verification time tracking
         self.recent_verification_times.append(complexity.measured_verify_time)
         self.recent_solve_times.append(complexity.measured_solve_time)
+        
+        # NEW: Credit reward to miner's wallet if blockchain state is available
+        if self.blockchain_state and miner_address:
+            # Credit reward to miner's balance
+            self.blockchain_state.update_balance(miner_address, reward)
+            
+            # Create coinbase transaction
+            from .blockchain_state import Transaction
+            coinbase_tx = Transaction(
+                sender="COINBASE",
+                recipient=miner_address,
+                amount=reward,
+                timestamp=block.timestamp
+            )
+            
+            # Add to transaction history
+            self.blockchain_state.transaction_history[miner_address].append(coinbase_tx)
+            
+            print(f"💰 Credited {reward:.6f} coins to miner {miner_address}")
     
     def _update_capacity_metrics(self, capacity: ProblemTier, record: WorkScoreRecord):
         """Track performance by capacity - no assumptions about relative difficulty"""

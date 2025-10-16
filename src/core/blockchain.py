@@ -1069,18 +1069,117 @@ class InsufficientWorkError(Exception):
     pass
 
 
-# Placeholder Transaction class (assuming it exists elsewhere)
+# Enhanced Transaction class with cryptographic signatures
 class Transaction:
-    def __init__(self, sender, recipient, amount):
+    """
+    Enhanced Transaction class with cryptographic signatures and validation.
+    """
+    
+    def __init__(self, sender: str, recipient: str, amount: float, timestamp: float = None):
         self.sender = sender
         self.recipient = recipient
         self.amount = amount
-
+        self.timestamp = timestamp or time.time()
+        self.transaction_id = ""
+        self.signature = ""
+        self.public_key = ""
+        
+        # Calculate transaction ID
+        self.transaction_id = self.calculate_transaction_id()
+    
+    def calculate_transaction_id(self) -> str:
+        """Calculate unique transaction ID from transaction data."""
+        import hashlib
+        data = f"{self.sender}{self.recipient}{self.amount}{self.timestamp}".encode()
+        return hashlib.sha256(data).hexdigest()
+    
+    def sign(self, private_key_bytes: bytes) -> str:
+        """
+        Sign transaction with private key.
+        
+        Args:
+            private_key_bytes: Private key as bytes
+            
+        Returns:
+            Signature as hex string
+        """
+        try:
+            from cryptography.hazmat.primitives.asymmetric import ed25519
+            from cryptography.hazmat.primitives import serialization
+            
+            # Load private key
+            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_key_bytes)
+            
+            # Get public key for storage
+            public_key = private_key.public_key()
+            self.public_key = public_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw
+            ).hex()
+            
+            # Sign transaction data
+            transaction_data = f"{self.sender}{self.recipient}{self.amount}{self.timestamp}".encode()
+            signature = private_key.sign(transaction_data)
+            self.signature = signature.hex()
+            
+            return self.signature
+        except Exception as e:
+            print(f"Error signing transaction: {e}")
+            return ""
+    
+    def verify_signature(self) -> bool:
+        """
+        Verify transaction signature.
+        
+        Returns:
+            True if signature is valid
+        """
+        try:
+            from cryptography.hazmat.primitives.asymmetric import ed25519
+            
+            if not self.signature or not self.public_key:
+                return False
+            
+            # Load public key
+            public_key_bytes = bytes.fromhex(self.public_key)
+            public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
+            
+            # Verify signature
+            transaction_data = f"{self.sender}{self.recipient}{self.amount}{self.timestamp}".encode()
+            signature_bytes = bytes.fromhex(self.signature)
+            
+            public_key.verify(signature_bytes, transaction_data)
+            return True
+        except Exception:
+            return False
+    
     def to_dict(self):
-        return {'sender': self.sender, 'recipient': self.recipient, 'amount': self.amount}
+        return {
+            'transaction_id': self.transaction_id,
+            'sender': self.sender, 
+            'recipient': self.recipient, 
+            'amount': self.amount,
+            'timestamp': self.timestamp,
+            'signature': self.signature,
+            'public_key': self.public_key
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict):
+        """Create transaction from dictionary."""
+        tx = cls(
+            sender=data['sender'],
+            recipient=data['recipient'],
+            amount=data['amount'],
+            timestamp=data.get('timestamp', time.time())
+        )
+        tx.transaction_id = data.get('transaction_id', tx.transaction_id)
+        tx.signature = data.get('signature', '')
+        tx.public_key = data.get('public_key', '')
+        return tx
 
     def __str__(self):
-        return f"{self.sender} sent {self.amount} to {self.recipient}"
+        return f"Transaction {self.transaction_id[:8]}...: {self.sender} -> {self.recipient} ({self.amount})"
 
 # Create a dummy previous block (or use the genesis block if available)
 # Ensure this runs to create the genesis block with the correct structure

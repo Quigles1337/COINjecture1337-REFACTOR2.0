@@ -80,6 +80,10 @@ Examples:
         self._add_check_submission_command(subparsers)
         self._add_list_submissions_command(subparsers)
         
+        # Wallet and transaction commands
+        self._add_wallet_commands(subparsers)
+        self._add_transaction_commands(subparsers)
+        
         # Interactive menu command
         self._add_interactive_command(subparsers)
         
@@ -350,6 +354,69 @@ Examples:
             help='Filter by submission status'
         )
     
+    def _add_wallet_commands(self, subparsers):
+        """Add wallet command parsers."""
+        # Create wallet
+        create_parser = subparsers.add_parser(
+            'wallet-create',
+            help='Create new wallet'
+        )
+        create_parser.add_argument('name', help='Wallet name')
+        create_parser.set_defaults(func=self._handle_wallet_create)
+        
+        # List wallets
+        list_parser = subparsers.add_parser(
+            'wallet-list',
+            help='List available wallets'
+        )
+        list_parser.set_defaults(func=self._handle_wallet_list)
+        
+        # Get balance
+        balance_parser = subparsers.add_parser(
+            'wallet-balance',
+            help='Get wallet balance'
+        )
+        balance_parser.add_argument('address', help='Wallet address')
+        balance_parser.set_defaults(func=self._handle_wallet_balance)
+    
+    def _add_transaction_commands(self, subparsers):
+        """Add transaction command parsers."""
+        # Send transaction
+        send_parser = subparsers.add_parser(
+            'transaction-send',
+            help='Send transaction'
+        )
+        send_parser.add_argument('sender', help='Sender address')
+        send_parser.add_argument('recipient', help='Recipient address')
+        send_parser.add_argument('amount', type=float, help='Amount to send')
+        send_parser.add_argument('--private-key', help='Private key for signing')
+        send_parser.set_defaults(func=self._handle_transaction_send)
+        
+        # Transaction history
+        history_parser = subparsers.add_parser(
+            'transaction-history',
+            help='Get transaction history'
+        )
+        history_parser.add_argument('address', help='Wallet address')
+        history_parser.add_argument('--limit', type=int, default=100, help='Number of transactions to show')
+        history_parser.set_defaults(func=self._handle_transaction_history)
+        
+        # Pending transactions
+        pending_parser = subparsers.add_parser(
+            'transaction-pending',
+            help='View pending transactions'
+        )
+        pending_parser.add_argument('--limit', type=int, default=100, help='Number of transactions to show')
+        pending_parser.set_defaults(func=self._handle_transaction_pending)
+        
+        # Get transaction by ID
+        get_parser = subparsers.add_parser(
+            'transaction-get',
+            help='Get transaction by ID'
+        )
+        get_parser.add_argument('tx_id', help='Transaction ID')
+        get_parser.set_defaults(func=self._handle_transaction_get)
+
     def _add_interactive_command(self, subparsers):
         """Add interactive menu command parser."""
         parser = subparsers.add_parser(
@@ -826,6 +893,150 @@ Examples:
         elif status.get('mode') == 'MULTIPLE':
             print(f"Progress: {status.get('progress', 'N/A')}")
     
+    def _handle_wallet_create(self, args) -> int:
+        """Handle wallet creation."""
+        try:
+            from tokenomics.wallet import WalletManager
+            manager = WalletManager()
+            
+            wallet = manager.create_wallet(args.name)
+            if wallet:
+                print(f"✅ Created wallet '{args.name}'")
+                print(f"   Address: {wallet.address}")
+                print(f"   Public Key: {wallet.get_public_key_bytes().hex()}")
+                return 0
+            else:
+                print("❌ Failed to create wallet")
+                return 1
+        except Exception as e:
+            print(f"❌ Error creating wallet: {e}")
+            return 1
+    
+    def _handle_wallet_list(self, args) -> int:
+        """Handle wallet listing."""
+        try:
+            from tokenomics.wallet import WalletManager
+            manager = WalletManager()
+            
+            wallets = manager.list_wallets()
+            if wallets:
+                print("📋 Available wallets:")
+                for wallet in wallets:
+                    print(f"   Address: {wallet['address']}")
+                    print(f"   Public Key: {wallet['public_key']}")
+                    print()
+            else:
+                print("📋 No wallets found")
+            return 0
+        except Exception as e:
+            print(f"❌ Error listing wallets: {e}")
+            return 1
+    
+    def _handle_wallet_balance(self, args) -> int:
+        """Handle wallet balance check."""
+        try:
+            from tokenomics.blockchain_state import BlockchainState
+            state = BlockchainState()
+            
+            balance = state.get_balance(args.address)
+            print(f"💰 Balance for {args.address}: {balance:.6f} coins")
+            return 0
+        except Exception as e:
+            print(f"❌ Error checking balance: {e}")
+            return 1
+    
+    def _handle_transaction_send(self, args) -> int:
+        """Handle transaction sending."""
+        try:
+            from tokenomics.blockchain_state import BlockchainState, Transaction
+            state = BlockchainState()
+            
+            # Create transaction
+            transaction = Transaction(
+                sender=args.sender,
+                recipient=args.recipient,
+                amount=args.amount,
+                timestamp=time.time()
+            )
+            
+            # Sign if private key provided
+            if args.private_key:
+                private_key_bytes = bytes.fromhex(args.private_key)
+                transaction.sign(private_key_bytes)
+            
+            # Add to pool
+            if state.add_transaction(transaction):
+                print(f"✅ Transaction submitted")
+                print(f"   ID: {transaction.transaction_id}")
+                print(f"   From: {args.sender}")
+                print(f"   To: {args.recipient}")
+                print(f"   Amount: {args.amount}")
+                return 0
+            else:
+                print("❌ Transaction validation failed")
+                return 1
+        except Exception as e:
+            print(f"❌ Error sending transaction: {e}")
+            return 1
+    
+    def _handle_transaction_history(self, args) -> int:
+        """Handle transaction history retrieval."""
+        try:
+            from tokenomics.blockchain_state import BlockchainState
+            state = BlockchainState()
+            
+            transactions = state.get_transaction_history(args.address, args.limit)
+            if transactions:
+                print(f"📜 Transaction history for {args.address}:")
+                for tx in transactions:
+                    print(f"   {tx.transaction_id[:8]}... | {tx.sender} -> {tx.recipient} | {tx.amount} | {time.ctime(tx.timestamp)}")
+            else:
+                print(f"📜 No transactions found for {args.address}")
+            return 0
+        except Exception as e:
+            print(f"❌ Error getting transaction history: {e}")
+            return 1
+    
+    def _handle_transaction_pending(self, args) -> int:
+        """Handle pending transactions listing."""
+        try:
+            from tokenomics.blockchain_state import BlockchainState
+            state = BlockchainState()
+            
+            pending = state.get_pending_transactions(args.limit)
+            if pending:
+                print(f"⏳ Pending transactions ({len(pending)}):")
+                for tx in pending:
+                    print(f"   {tx.transaction_id[:8]}... | {tx.sender} -> {tx.recipient} | {tx.amount} | {time.ctime(tx.timestamp)}")
+            else:
+                print("⏳ No pending transactions")
+            return 0
+        except Exception as e:
+            print(f"❌ Error getting pending transactions: {e}")
+            return 1
+    
+    def _handle_transaction_get(self, args) -> int:
+        """Handle transaction retrieval by ID."""
+        try:
+            from tokenomics.blockchain_state import BlockchainState
+            state = BlockchainState()
+            
+            transaction = state.get_transaction_by_id(args.tx_id)
+            if transaction:
+                print(f"🔍 Transaction {args.tx_id}:")
+                print(f"   From: {transaction.sender}")
+                print(f"   To: {transaction.recipient}")
+                print(f"   Amount: {transaction.amount}")
+                print(f"   Timestamp: {time.ctime(transaction.timestamp)}")
+                print(f"   Signature: {transaction.signature[:16]}..." if transaction.signature else "   Signature: None")
+            else:
+                print(f"❌ Transaction {args.tx_id} not found")
+                return 1
+            return 0
+        except Exception as e:
+            print(f"❌ Error getting transaction: {e}")
+            return 1
+
     def _handle_interactive(self, args) -> int:
         """Handle interactive menu system."""
         return self._interactive_menu()

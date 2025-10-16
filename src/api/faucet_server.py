@@ -286,6 +286,193 @@ class FaucetAPI:
                 "message": "IPFS integration coming soon"
             }), 501
         
+        # ============================================
+        # WALLET ENDPOINTS
+        # ============================================
+        
+        @self.app.route('/v1/wallet/create', methods=['POST'])
+        @self.limiter.limit("10 per minute")
+        def create_wallet():
+            """Create new wallet."""
+            try:
+                data = request.get_json() or {}
+                name = data.get('name', f'wallet_{int(time.time())}')
+                
+                # Import wallet manager
+                from tokenomics.wallet import WalletManager
+                manager = WalletManager()
+                
+                wallet = manager.create_wallet(name)
+                if wallet:
+                    return jsonify({
+                        "status": "success",
+                        "wallet": {
+                            "address": wallet.address,
+                            "name": name,
+                            "public_key": wallet.get_public_key_bytes().hex()
+                        }
+                    })
+                else:
+                    return jsonify({
+                        "status": "error",
+                        "error": "Failed to create wallet"
+                    }), 500
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "error": "Internal server error",
+                    "message": str(e)
+                }), 500
+        
+        @self.app.route('/v1/wallet/<address>/balance', methods=['GET'])
+        @self.limiter.limit("100 per minute")
+        def get_wallet_balance(address: str):
+            """Get wallet balance."""
+            try:
+                # Import blockchain state
+                from tokenomics.blockchain_state import BlockchainState
+                state = BlockchainState()
+                
+                balance = state.get_balance(address)
+                return jsonify({
+                    "status": "success",
+                    "address": address,
+                    "balance": balance
+                })
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "error": "Internal server error",
+                    "message": str(e)
+                }), 500
+        
+        @self.app.route('/v1/wallet/<address>/transactions', methods=['GET'])
+        @self.limiter.limit("50 per minute")
+        def get_wallet_transactions(address: str):
+            """Get wallet transaction history."""
+            try:
+                limit = request.args.get('limit', 100, type=int)
+                
+                # Import blockchain state
+                from tokenomics.blockchain_state import BlockchainState
+                state = BlockchainState()
+                
+                transactions = state.get_transaction_history(address, limit)
+                return jsonify({
+                    "status": "success",
+                    "address": address,
+                    "transactions": [tx.to_dict() for tx in transactions],
+                    "count": len(transactions)
+                })
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "error": "Internal server error",
+                    "message": str(e)
+                }), 500
+        
+        # ============================================
+        # TRANSACTION ENDPOINTS
+        # ============================================
+        
+        @self.app.route('/v1/transaction/send', methods=['POST'])
+        @self.limiter.limit("20 per minute")
+        def send_transaction():
+            """Submit transaction to pool."""
+            try:
+                data = request.get_json()
+                if not data:
+                    return jsonify({
+                        "status": "error",
+                        "error": "No transaction data provided"
+                    }), 400
+                
+                # Import blockchain state
+                from tokenomics.blockchain_state import BlockchainState, Transaction
+                state = BlockchainState()
+                
+                # Create transaction
+                transaction = Transaction(
+                    sender=data['sender'],
+                    recipient=data['recipient'],
+                    amount=float(data['amount']),
+                    timestamp=time.time()
+                )
+                
+                # Sign transaction if private key provided
+                if 'private_key' in data:
+                    private_key_bytes = bytes.fromhex(data['private_key'])
+                    transaction.sign(private_key_bytes)
+                
+                # Add to pool
+                if state.add_transaction(transaction):
+                    return jsonify({
+                        "status": "success",
+                        "transaction": transaction.to_dict()
+                    })
+                else:
+                    return jsonify({
+                        "status": "error",
+                        "error": "Transaction validation failed"
+                    }), 400
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "error": "Internal server error",
+                    "message": str(e)
+                }), 500
+        
+        @self.app.route('/v1/transaction/pending', methods=['GET'])
+        @self.limiter.limit("50 per minute")
+        def get_pending_transactions():
+            """Get pending transactions."""
+            try:
+                limit = request.args.get('limit', 100, type=int)
+                
+                # Import blockchain state
+                from tokenomics.blockchain_state import BlockchainState
+                state = BlockchainState()
+                
+                pending = state.get_pending_transactions(limit)
+                return jsonify({
+                    "status": "success",
+                    "transactions": [tx.to_dict() for tx in pending],
+                    "count": len(pending)
+                })
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "error": "Internal server error",
+                    "message": str(e)
+                }), 500
+        
+        @self.app.route('/v1/transaction/<tx_id>', methods=['GET'])
+        @self.limiter.limit("100 per minute")
+        def get_transaction(tx_id: str):
+            """Get transaction by ID."""
+            try:
+                # Import blockchain state
+                from tokenomics.blockchain_state import BlockchainState
+                state = BlockchainState()
+                
+                transaction = state.get_transaction_by_id(tx_id)
+                if transaction:
+                    return jsonify({
+                        "status": "success",
+                        "transaction": transaction.to_dict()
+                    })
+                else:
+                    return jsonify({
+                        "status": "error",
+                        "error": "Transaction not found"
+                    }), 404
+            except Exception as e:
+                return jsonify({
+                    "status": "error",
+                    "error": "Internal server error",
+                    "message": str(e)
+                }), 500
+        
         # Error handlers
         @self.app.errorhandler(429)
         def ratelimit_handler(e):

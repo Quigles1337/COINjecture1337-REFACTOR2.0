@@ -14,8 +14,23 @@ This document describes the different ways to download and install COINjecture f
 
 ## 🚀 Quick Start Options
 
-### Option 1: One-Click Installer (Recommended)
-**For:** All platforms, easiest installation
+### Option 1: Standalone Applications (Recommended for Non-Developers)
+**For:** All platforms, zero technical setup required
+
+**Download and run:**
+- **macOS**: `COINjecture-3.5.0-macOS.dmg` - Double-click to install
+- **Windows**: `COINjecture-3.5.0-Windows-Installer.exe` - Run installer
+- **Linux**: `COINjecture-3.5.0-Linux.AppImage` - Make executable and run
+
+**Features:**
+- ✅ No Python installation required
+- ✅ Beautiful interactive menu for beginners
+- ✅ Direct CLI access for advanced users
+- ✅ Automatic wallet and mining setup
+- ✅ Live network integration
+
+### Option 2: One-Click Installer (For Developers)
+**For:** All platforms, Python-based installation
 
 ```bash
 # Download and run the installer
@@ -30,7 +45,7 @@ python3 install_coinjecture.py
 - ✅ Tests the installation
 - ✅ Provides clear next steps
 
-### Option 2: Platform-Specific Startup Scripts
+### Option 3: Platform-Specific Startup Scripts
 
 #### Windows Users
 ```cmd
@@ -57,7 +72,7 @@ chmod +x start_coinjecture.sh
 - 🚀 Direct launch to interactive menu
 - ✅ Error handling and guidance
 
-### Option 3: Python Wheel Package
+### Option 4: Python Wheel Package
 **For:** Developers, system administrators
 
 ```bash
@@ -93,7 +108,17 @@ coinjectured interactive
 
 ## 🎯 Installation Methods by Use Case
 
-### For End Users (Non-Technical)
+### For End Users (Non-Technical) - RECOMMENDED
+1. **Download** the standalone application for your platform:
+   - **macOS**: `COINjecture-3.5.0-macOS.dmg`
+   - **Windows**: `COINjecture-3.5.0-Windows-Installer.exe`
+   - **Linux**: `COINjecture-3.5.0-Linux.AppImage`
+2. **Install** using the platform-specific installer
+3. **Launch** COINjecture from Applications/Start Menu
+4. **Choose** "Interactive Menu" for guided experience
+5. **Start** mining, creating wallets, or exploring blockchain
+
+### For End Users (Alternative)
 1. **Download** the COINjecture folder
 2. **Run** `install_coinjecture.py` (double-click on Windows)
 3. **Follow** the on-screen instructions
@@ -107,10 +132,21 @@ coinjectured interactive
 4. **Install** package: `pip install dist/coinjecture-*.whl`
 
 ### For System Administrators
-1. **Use** the wheel package for clean installation
-2. **Configure** systemd services (Linux) or Windows services
-3. **Set up** monitoring and logging
-4. **Deploy** across multiple machines
+1. **Use** the standalone applications for easy deployment
+2. **Or use** the wheel package for clean installation
+3. **Configure** systemd services (Linux) or Windows services
+4. **Set up** monitoring and logging
+5. **Deploy** across multiple machines
+
+### For Package Builders
+1. **Navigate** to `cli-packages/` directory
+2. **Run** `python3 build_packages.py` for current platform
+3. **Or run** platform-specific build scripts:
+   - **macOS**: `./macos/builders/build_macos.sh`
+   - **Windows**: `windows\builders\build_windows.bat`
+   - **Linux**: `./linux/builders/build_linux.sh`
+4. **Find** built packages in `dist/packages/`
+5. **Test** packages on clean systems
 
 ## 🔧 Advanced Installation
 
@@ -148,6 +184,14 @@ docker run -it coinjecture interactive
 - `requirements.txt` - Python dependencies
 - `README.md` - Project documentation
 - `USER_GUIDE.md` - User instructions
+
+### CLI Packages (New!)
+- `cli-packages/` - Standalone application build system
+- `cli-packages/shared/` - Shared components across platforms
+- `cli-packages/macos/` - macOS-specific build tools
+- `cli-packages/windows/` - Windows-specific build tools
+- `cli-packages/linux/` - Linux-specific build tools
+- `DISTRIBUTION.md` - Complete distribution guide
 
 ### Startup Scripts
 - `start_coinjecture.bat` - Windows launcher

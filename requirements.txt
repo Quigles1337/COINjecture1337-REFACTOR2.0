@@ -4,6 +4,9 @@
 # HTTP client for IPFS API integration and CLI telemetry
 requests>=2.25.0
 
+# Cryptographic operations for wallet and transaction signing
+cryptography>=41.0.0
+
 # Flask dependencies for Faucet API
 Flask>=2.0.0
 Flask-CORS>=3.0.0
