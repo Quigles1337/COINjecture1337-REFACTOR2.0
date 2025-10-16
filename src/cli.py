@@ -34,11 +34,15 @@ class COINjectureCLI:
         self.parser = self._create_parser()
         # Default faucet API endpoint
         self.faucet_api_url = "http://167.172.213.70:5000"
+        # IPFS API endpoint (configurable via env)
+        self.ipfs_api_url = os.environ.get("IPFS_API_URL", "http://localhost:5001")
+        self.ipfs_available = False
         self.offline_queue_file = "offline_queue.json"
         self.telemetry_enabled = True  # Enable telemetry by default
         self.telemetry_queue = queue.Queue()
         self.telemetry_thread = None
         self._check_network_connectivity()
+        self._check_ipfs_connectivity()
     
     def _check_network_connectivity(self):
         """Check network connectivity to the live COINjecture network."""
@@ -62,6 +66,26 @@ class COINjectureCLI:
             print(f"   Falling back to offline mode")
             self.telemetry_enabled = False
             return False
+
+    def _check_ipfs_connectivity(self) -> bool:
+        """Check if IPFS API is reachable and print status."""
+        try:
+            # IPFS /api/v0/version requires POST
+            version_url = f"{self.ipfs_api_url}/api/v0/version"
+            r = requests.post(version_url, timeout=5)
+            if r.ok:
+                info = r.json() if r.content else {}
+                vers = info.get("Version", "unknown")
+                print("🧩 IPFS: ✅ Available")
+                print(f"   API URL: {self.ipfs_api_url}")
+                print(f"   Version: {vers}")
+                self.ipfs_available = True
+                return True
+            print(f"🧩 IPFS: ❌ Unavailable (HTTP {r.status_code})")
+        except Exception as e:
+            print(f"🧩 IPFS: ❌ Unavailable ({e})")
+        self.ipfs_available = False
+        return False
     
     def _fetch_live_blockchain_data(self):
         """Fetch live blockchain data from the droplet."""
@@ -314,6 +338,14 @@ Examples:
             default='json',
             help='Output format (default: json)'
         )
+        parser.set_defaults(func=self._handle_get_proof)
+
+        # IPFS status command
+        ipfs_parser = subparsers.add_parser(
+            'ipfs-status',
+            help='Check IPFS connectivity and version'
+        )
+        ipfs_parser.set_defaults(func=self._handle_ipfs_status)
     
     def _add_add_peer_command(self, subparsers):
         """Add add-peer command parser."""
@@ -776,31 +808,57 @@ Examples:
         """Handle get-proof command."""
         try:
             print(f"Getting proof data from IPFS CID: {args.cid}")
-            
-            # This would typically fetch from IPFS
-            # For now, return a placeholder response
-            proof_data = {
-                "cid": args.cid,
-                "status": "retrieved",
-                "data": {
-                    "problem": {"type": "subset_sum", "numbers": [1, 2, 3, 4, 5], "target": 7},
-                    "solution": [2, 5],
-                    "complexity": "O(2^n)"
-                }
-            }
-            
+            data_bytes: Optional[bytes] = None
+            # Prefer direct IPFS API if available
+            if self.ipfs_available:
+                try:
+                    # Lazy import to avoid hard dependency if packaging without IPFS
+                    from .storage import IPFSClient  # type: ignore
+                except Exception:
+                    try:
+                        from storage import IPFSClient  # type: ignore
+                    except Exception:
+                        IPFSClient = None  # type: ignore
+                if IPFSClient is not None:
+                    client = IPFSClient(api_url=self.ipfs_api_url)
+                    data_bytes = client.get(args.cid)
+            # Fallback to public gateway
+            if data_bytes is None:
+                gateway = f"https://ipfs.io/ipfs/{args.cid}"
+                resp = requests.get(gateway, timeout=10)
+                if resp.ok:
+                    data_bytes = resp.content
+            if data_bytes is None:
+                print("Error: Unable to fetch proof data (IPFS unavailable)", file=sys.stderr)
+                return 1
+            # Try to decode JSON if requested
             if args.format == 'json':
-                print(json.dumps(proof_data, indent=2))
+                try:
+                    obj = json.loads(data_bytes.decode('utf-8'))
+                    print(json.dumps(obj, indent=2))
+                except Exception:
+                    print("Warning: Data is not valid JSON; showing raw bytes length")
+                    print(len(data_bytes))
             else:
-                print(f"Proof CID: {proof_data['cid']}")
-                print(f"Status: {proof_data['status']}")
-                print(f"Problem: {proof_data['data']['problem']}")
-                print(f"Solution: {proof_data['data']['solution']}")
-            
+                # Raw output: print size and a safe preview
+                preview = data_bytes[:64]
+                print(f"Bytes: {len(data_bytes)}")
+                try:
+                    print(f"Preview: {preview.decode('utf-8', errors='ignore')}")
+                except Exception:
+                    print("Preview: <binary>")
             return 0
-            
         except Exception as e:
             print(f"Error getting proof: {e}", file=sys.stderr)
+            return 1
+
+    def _handle_ipfs_status(self, args) -> int:
+        """Report IPFS status."""
+        try:
+            ok = self._check_ipfs_connectivity()
+            return 0 if ok else 1
+        except Exception as e:
+            print(f"Error checking IPFS: {e}", file=sys.stderr)
             return 1
     
     def _handle_add_peer(self, args) -> int:

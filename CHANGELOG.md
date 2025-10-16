@@ -5,6 +5,20 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.2] - 2025-10-16
+
+### Added
+- **CLI IPFS Support**: IPFS health check on startup, `ipfs-status` command, and real `get-proof` that fetches from IPFS API with public gateway fallback.
+- **Mining Output Enhancements**: Clear mining reward section and IPFS CID shown after each mined block.
+
+### Changed
+- **Mining API**: `mine_block` parameter renamed to `capacity` and integrated optional IPFS upload with graceful placeholder CID fallback when IPFS is unavailable.
+
+### Technical Details
+- CLI imports and uses IPFS API (`/api/v0/version` via POST for health; `/api/v0/cat` for data).
+- Environment variable `IPFS_API_URL` supported (default `http://localhost:5001`).
+- Gateway fallback `https://ipfs.io/ipfs/{cid}` when local IPFS is not reachable.
+
 ## [3.5.1] - 2025-10-15
 
 ### Fixed

@@ -4,7 +4,7 @@ COINjecture v3: Utility-Based Computational Work Blockchain
 Built on Satoshi's foundation. Evolved with complexity theory. Driven by real-world utility.
 """
 
-__version__ = "3.5.1"
+__version__ = "3.5.2"
 __author__ = "COINjecture"
 __license__ = "MIT"
 
