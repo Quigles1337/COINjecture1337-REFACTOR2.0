@@ -66,6 +66,28 @@ class FaucetAPI:
     def _register_routes(self):
         """Register API routes."""
         
+        @self.app.route('/', methods=['GET'])
+        def root():
+            """Root endpoint with API information."""
+            return jsonify({
+                "name": "COINjecture Faucet API",
+                "version": "3.3.4",
+                "description": "One-way faucet API for streaming blockchain data",
+                "endpoints": {
+                    "health": "/health",
+                    "latest_block": "/v1/data/block/latest",
+                    "block_by_index": "/v1/data/block/{index}",
+                    "block_range": "/v1/data/blocks?start={start}&end={end}",
+                    "ipfs_data": "/v1/data/ipfs/{cid}",
+                    "telemetry_ingest": "/v1/ingest/telemetry",
+                    "block_ingest": "/v1/ingest/block",
+                    "latest_telemetry": "/v1/display/telemetry/latest",
+                    "latest_blocks": "/v1/display/blocks/latest"
+                },
+                "server": "http://167.172.213.70:5000",
+                "status": "operational"
+            })
+        
         @self.app.route('/health', methods=['GET'])
         def health_check():
             """Health check endpoint."""

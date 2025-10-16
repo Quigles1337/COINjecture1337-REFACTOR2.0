@@ -5,6 +5,25 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.5] - 2025-10-15
+
+### Added
+- **Root API Endpoint** - Added root endpoint (/) with comprehensive API information
+- **API Documentation** - Root endpoint provides all available endpoints and usage information
+- **Server Status** - Root endpoint includes version, description, and operational status
+
+### Fixed
+- **404 Error on Root URL** - Resolved 404 error when accessing server root URL
+- **API Discoverability** - Users can now easily discover available endpoints
+
+### Technical Details
+- **Root Endpoint**: Returns JSON with API name, version, description, and endpoint list
+- **Endpoint Documentation**: Lists all available endpoints with their paths
+- **Version Information**: Includes current API version (3.3.5)
+- **Server Information**: Provides server URL and operational status
+
+#buildinginpublic #apiimprovement #rootendpoint #documentation
+
 ## [3.3.4] - 2025-10-15
 
 ### Fixed
