@@ -205,13 +205,13 @@ class MessageCompressor:
         
         # Try zstd first, fallback to snappy
         try:
-            import zstandard as zstd
+            import zstandard as zstd  # type: ignore
             compressor = zstd.ZstdCompressor()
             compressed = compressor.compress(data)
             return compressed, CompressionCodec.ZSTD
         except ImportError:
             try:
-                import snappy
+                import snappy  # type: ignore
                 compressed = snappy.compress(data)
                 return compressed, CompressionCodec.SNAPPY
             except ImportError:
@@ -233,14 +233,14 @@ class MessageCompressor:
             return data
         elif codec == CompressionCodec.ZSTD:
             try:
-                import zstandard as zstd
+                import zstandard as zstd  # type: ignore
                 decompressor = zstd.ZstdDecompressor()
                 return decompressor.decompress(data)
             except ImportError:
                 raise ValueError("zstd decompression not available")
         elif codec == CompressionCodec.SNAPPY:
             try:
-                import snappy
+                import snappy  # type: ignore
                 return snappy.decompress(data)
             except ImportError:
                 raise ValueError("snappy decompression not available")

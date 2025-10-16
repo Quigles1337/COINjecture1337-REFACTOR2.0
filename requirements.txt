@@ -4,6 +4,10 @@
 # HTTP client for IPFS API integration
 requests>=2.25.0
 
+# Optional compression dependencies for network module
+# zstandard>=0.18.0  # Uncomment for zstd compression support
+# python-snappy>=0.6.0  # Uncomment for snappy compression support
+
 # Optional: For production deployments
 # sqlite3 is included in Python standard library
 # LevelDB/RocksDB bindings can be added for production use
