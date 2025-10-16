@@ -5,6 +5,28 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.6] - 2025-10-16
+
+### Improved
+- **Prominent Package Location**: Moved macOS package to `cli-packages/` root for easy access
+- **Direct Download Links**: Updated README links to point to prominent location
+- **CLI Packages README**: Created prominent download section with direct access
+- **User Experience**: Package now easily accessible without navigating subfolders
+
+### Technical Details
+- **`cli-packages/COINjecture-macOS-v3.6.5-Final.zip`**: Package moved to prominent location
+- **`cli-packages/README.md`**: New prominent download page with direct links
+- **Main README**: Updated download link to point to prominent location
+- **Package Organization**: Clean, accessible structure for all users
+
+### Impact
+- **Easy Access**: Users can find download link immediately
+- **Prominent Location**: Package no longer buried in subfolders
+- **Better UX**: Clear, direct path to download
+- **Professional Distribution**: Clean, organized package structure
+
+#buildinginpublic #cli #download #prominent #ux
+
 ## [3.6.5] - 2025-10-16
 
 ### Added
