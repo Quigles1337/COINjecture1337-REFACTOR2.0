@@ -5,6 +5,28 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.2] - 2025-10-16
+
+### Fixed
+- **API Route Conflict**: Resolved duplicate route name conflict in faucet_server.py
+- **Droplet Deployment**: Fixed AssertionError preventing service startup on droplet
+- **Block Submission Endpoint**: `/v1/ingest/block` endpoint now properly available on droplet
+- **Service Stability**: API service can now start without route conflicts
+
+### Technical Details
+- **`src/api/faucet_server.py`**: Renamed duplicate `ingest_block` function to `ingest_block_submission`
+- **Route Management**: Both telemetry and block submission endpoints now coexist properly
+- **Deployment**: Droplet services can restart successfully with new API endpoints
+- **Network Integration**: Full block submission functionality now available on live network
+
+### Impact
+- **Network Ready**: Droplet now has complete block submission API
+- **CLI Integration**: CLI can now successfully submit blocks to the live network
+- **Service Stability**: All API endpoints working without conflicts
+- **Production Ready**: Full mining and network submission pipeline operational
+
+#buildinginpublic #networkintegration #apifix #dropletdeployment
+
 ## [3.6.1] - 2025-10-16
 
 ### Fixed
