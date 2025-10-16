@@ -5,6 +5,34 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] - 2025-10-15
+
+### Added
+- **Consensus Module** (`src/consensus.py`) - Implements `docs/blockchain/consensus.md` specification
+  - ConsensusEngine class for blockchain consensus
+  - Header validation pipeline (basic validation, commitment presence, difficulty check)
+  - Reveal validation (commitment verification, solution verification)
+  - Fork choice algorithm (cumulative work with tie-breaking)
+  - Block tree management with BlockNode data structure
+  - Genesis block generation (deterministic)
+  - Chain reorganization handling with bounded depth
+  - Finality tracking (k-deep confirmation)
+  - Rate limiting for DOS protection
+
+### Changed
+- Consensus module uses capacity terminology throughout
+- Integrates with POW and Storage modules seamlessly
+- Includes comprehensive test suite
+
+### Fixed
+- Genesis block generation with proper EnergyMetrics
+- Block tree cumulative work calculation
+
+### Documentation
+- Complete docstrings referencing consensus.md specification
+- Inline comments for complex fork choice logic
+- Test suite demonstrates consensus functionality
+
 ## [3.0.2] - 2025-10-15
 
 ### Added
