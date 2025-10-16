@@ -1,0 +1,9 @@
+# COINjecture External Dependencies
+# Install with: pip install -r requirements.txt
+
+# HTTP client for IPFS API integration
+requests>=2.25.0
+
+# Optional: For production deployments
+# sqlite3 is included in Python standard library
+# LevelDB/RocksDB bindings can be added for production use

@@ -85,7 +85,10 @@ class IPFSClient:
         Returns:
             Response data
         """
-        import requests
+        try:
+            import requests  # type: ignore  # External dependency
+        except ImportError:
+            raise Exception("requests library not available. Install with: pip install requests")
         
         url = f"{self.api_url}/api/v0/{endpoint}"
         
@@ -131,7 +134,11 @@ class IPFSClient:
             Object data
         """
         try:
-            import requests
+            import requests  # type: ignore  # External dependency
+        except ImportError:
+            raise Exception("requests library not available. Install with: pip install requests")
+        
+        try:
             url = f"{self.api_url}/api/v0/cat?arg={cid}"
             response = requests.get(url, timeout=self.timeout)
             response.raise_for_status()
