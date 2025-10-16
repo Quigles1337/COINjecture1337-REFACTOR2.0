@@ -5,6 +5,22 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.11] - 2025-10-15
+
+### Fixed
+- **Critical syntax error** in update_cache.py causing service crashes
+- **Missing docstring closure** in CacheUpdater class definition
+- **Cache updater service** now starts successfully and stays running
+- **blocks_history.json** now properly updated with IPFS CID
+
+### Technical Details
+- Fixed missing closing `"""` in CacheUpdater class docstring (line 34)
+- Service was crashing immediately on startup due to Python syntax error
+- Both latest_block.json and blocks_history.json now get correct IPFS CID
+- Cache updater runs continuously every 30 seconds
+
+#buildinginpublic #blockchain #bugfix
+
 ## [3.1.10] - 2025-10-15
 
 ### Fixed
