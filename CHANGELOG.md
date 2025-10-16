@@ -5,6 +5,26 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.7] - 2025-10-15
+
+### Fixed
+- **Missing update_cache.py file** recreated to enable IPFS integration
+- **Cache updater service** now properly initializes ConsensusEngine with IPFS
+- **Genesis block with IPFS CID** now correctly propagates to API responses
+
+### Added
+- Complete update_cache.py implementation with IPFS health checks
+- Proof summary extraction and formatting in cache files
+- Periodic cache refresh loop for real-time blockchain data
+
+### Technical Details
+- ConsensusEngine initialization triggers genesis block creation with IPFS upload
+- Cache updater extracts problem, solution, and complexity metrics for API
+- Both latest_block.json and blocks_history.json updated with real data
+- Should resolve null offchain_cid in API responses
+
+#buildinginpublic #blockchain #bugfix
+
 ## [3.1.6] - 2025-10-15
 
 ### Fixed
