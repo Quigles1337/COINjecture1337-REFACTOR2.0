@@ -5,6 +5,34 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.4] - 2025-10-15
+
+### Added
+- **Network Module** (`src/network.py`) - Implements `docs/blockchain/network.md` specification
+  - NetworkProtocol class for blockchain networking
+  - Message schemas (HeaderMsg, RevealMsg, RequestMsg, ResponseMsg)
+  - Gossipsub topics for headers, commit-reveal, requests, and responses
+  - RPC handlers (get_headers, get_block_by_hash, get_proof_by_cid)
+  - Message encoding/compression with zstd/snappy support
+  - Rate limiting and message validation
+  - Message deduplication by header_hash/commitment
+  - Integration with Consensus, Storage, and POW modules
+
+### Changed
+- Network module uses capacity terminology throughout
+- Message compression threshold set to 1KB
+- Rate limiting set to 100 messages per second per peer
+
+### Fixed
+- Import errors for dataclasses field and typing imports
+- Message serialization/deserialization
+- RPC request/response handling
+
+### Documentation
+- Complete docstrings referencing network.md specification
+- Inline comments for message handling and compression
+- Test suite demonstrates network functionality
+
 ## [3.0.3] - 2025-10-15
 
 ### Added
