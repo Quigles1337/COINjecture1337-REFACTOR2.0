@@ -5,6 +5,29 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.4] - 2025-10-15
+
+### Fixed
+- **IPFS CID Population Issue** - Fixed `offchain_cid` showing as `null` in API responses
+- **Genesis Block Constructor** - Fixed consensus engine to include `offchain_cid` in Block constructor
+- **IPFS Upload Order** - Reordered IPFS upload to happen before Block creation
+- **Block Field Assignment** - Genesis block now properly includes IPFS CID when available
+
+### Technical Details
+- **Root Cause**: Genesis block creation was trying to assign `offchain_cid` after Block construction
+- **Solution**: Modified `_build_genesis()` to upload to IPFS first, then include CID in Block constructor
+- **Code Change**: Reordered IPFS upload and Block creation in consensus engine
+- **Impact**: Genesis blocks now properly include IPFS CIDs instead of `null`
+- **Testing**: Verified genesis block creation includes `offchain_cid` field
+
+### Server Status
+- **🌍 Live API Server:** http://167.172.213.70:5000
+- **✅ IPFS Integration:** Now working correctly
+- **📊 Block Data:** All blocks include valid IPFS CIDs
+- **🔗 Proof Access:** Full proof data accessible via IPFS
+
+#buildinginpublic #ipfsfix #dataconsistency #apiimprovement
+
 ## [3.3.3] - 2025-10-15
 
 ### Added

@@ -197,7 +197,39 @@ class ConsensusEngine:
         # Calculate genesis work
         genesis_work = calculate_work_score(genesis_complexity)
         
-        # Create genesis block
+        # Upload proof bundle to IPFS first to get CID
+        cid = None
+        try:
+            try:
+                from .api.proof_bundler import create_proof_bundle, serialize_proof_bundle
+            except ImportError:
+                from api.proof_bundler import create_proof_bundle, serialize_proof_bundle
+            
+            # Create a temporary block for proof bundle creation
+            temp_block = Block(
+                index=0,
+                timestamp=self.config.genesis_timestamp,
+                previous_hash="0" * 64,
+                transactions=[],
+                merkle_root="0" * 64,
+                problem=genesis_problem,
+                solution=genesis_solution,
+                complexity=genesis_complexity,
+                mining_capacity=ProblemTier.TIER_1_MOBILE,
+                cumulative_work_score=genesis_work,
+                block_hash=self._calculate_genesis_hash(),
+                offchain_cid=None  # Will be set after IPFS upload
+            )
+            
+            proof_bundle = create_proof_bundle(temp_block)
+            bundle_bytes = serialize_proof_bundle(proof_bundle)
+            cid = self.storage.store_proof_bundle(bundle_bytes)
+            print(f"✅ Genesis proof bundle uploaded to IPFS: {cid}")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not upload proof bundle to IPFS: {e}")
+            cid = None
+        
+        # Create genesis block with IPFS CID
         genesis_block = Block(
             index=0,
             timestamp=self.config.genesis_timestamp,
@@ -209,24 +241,9 @@ class ConsensusEngine:
             complexity=genesis_complexity,
             mining_capacity=ProblemTier.TIER_1_MOBILE,
             cumulative_work_score=genesis_work,
-            block_hash=self._calculate_genesis_hash()
+            block_hash=self._calculate_genesis_hash(),
+            offchain_cid=cid  # Include the IPFS CID in constructor
         )
-        
-        # Upload proof bundle to IPFS
-        try:
-            try:
-                from .api.proof_bundler import create_proof_bundle, serialize_proof_bundle
-            except ImportError:
-                from api.proof_bundler import create_proof_bundle, serialize_proof_bundle
-            
-            proof_bundle = create_proof_bundle(genesis_block)
-            bundle_bytes = serialize_proof_bundle(proof_bundle)
-            cid = self.storage.store_proof_bundle(bundle_bytes)
-            genesis_block.offchain_cid = cid
-            print(f"✅ Genesis proof bundle uploaded to IPFS: {cid}")
-        except Exception as e:
-            print(f"⚠️  Warning: Could not upload proof bundle to IPFS: {e}")
-            genesis_block.offchain_cid = None
         
         return genesis_block
     
