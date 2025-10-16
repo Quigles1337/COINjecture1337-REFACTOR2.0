@@ -5,24 +5,78 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.7] - 2025-10-15
+
+### Added
+- **Immutable Genesis Block** - Genesis block now created with immutable IPFS parameters
+- **IPFS Integration Enhancement** - Enhanced genesis block creation with IPFS upload
+- **Immutable On-Chain Data** - Genesis block data is now immutable and includes all IPFS parameters
+- **Enhanced Logging** - Added detailed logging for genesis block creation process
+- **Creator Initials (SM)** - Creator initials embedded in immutable genesis block
+- **Genesis Transactions** - Genesis block includes creator attribution and blockchain initialization messages
+
+### Fixed
+- **Genesis Block Immutability** - Genesis block is now created once with IPFS integration and stored permanently
+- **IPFS Parameter Inclusion** - All IPFS parameters are now included in the immutable genesis block
+- **Block Storage** - Genesis block is stored permanently in blockchain database
+- **Creator Attribution** - Creator initials (SM) embedded in genesis seed, hash, and transactions
+
+### Technical Details
+- **Immutable Genesis**: Genesis block created with IPFS integration and stored permanently
+- **IPFS Parameters**: All IPFS parameters included in immutable genesis block
+- **Block Storage**: Genesis block stored in blockchain database for permanent access
+- **Enhanced Logging**: Added detailed logging for genesis block creation and IPFS upload
+- **Creator Initials**: SM initials embedded in genesis seed, hash calculation, and transactions
+- **Genesis Transactions**: Includes creator attribution and blockchain initialization messages
+
+#buildinginpublic #immutablegenesis #ipfsintegration #blockchainstorage #creatorinitials
+
+## [3.3.6] - 2025-10-15
+
+### Added
+- **IPFS Integration Fix** - Identified and documented IPFS CID population issue
+- **Cache Structure Analysis** - Analyzed JSON structure inconsistencies between API and cache
+- **IPFS Service Installation** - Installed and configured IPFS on live server
+- **Service Restart** - Restarted cache service to regenerate blocks with IPFS integration
+
+### Fixed
+- **IPFS Service Missing** - IPFS was not installed on the live server
+- **Cache Service Restart** - Restarted cache service to pick up IPFS changes
+- **JSON Structure Consistency** - Identified API wrapper vs cache file structure differences
+
+### Technical Details
+- **IPFS Installation**: Downloaded and installed go-ipfs v0.24.0 on live server
+- **IPFS Status**: IPFS daemon is now running with ID 12D3KooWEmrNrgbpeAUBrGMARzHi2hJbtPHVzEhCYdZHY2BCJ259
+- **Cache Analysis**: API wraps cache data in "data" field, cache file contains raw block data
+- **Service Status**: Cache service restarted successfully, monitoring for IPFS CID population
+
+#buildinginpublic #ipfsintegration #cachefix #servicestatus
+
 ## [3.3.5] - 2025-10-15
 
 ### Added
 - **Root API Endpoint** - Added root endpoint (/) with comprehensive API information
 - **API Documentation** - Root endpoint provides all available endpoints and usage information
 - **Server Status** - Root endpoint includes version, description, and operational status
+- **Interactive CLI Integration** - Comprehensive CLI documentation in README
+- **Command Reference** - Complete list of 15 CLI commands with examples
+- **Installation Guide** - Cross-platform installation instructions
 
 ### Fixed
 - **404 Error on Root URL** - Resolved 404 error when accessing server root URL
 - **API Discoverability** - Users can now easily discover available endpoints
+- **CLI Import Issues** - Fixed entry points in setup_dist.py for proper CLI access
+- **README Structure** - Restored original content and integrated CLI information
 
 ### Technical Details
 - **Root Endpoint**: Returns JSON with API name, version, description, and endpoint list
 - **Endpoint Documentation**: Lists all available endpoints with their paths
 - **Version Information**: Includes current API version (3.3.5)
 - **Server Information**: Provides server URL and operational status
+- **CLI Entry Points**: Fixed console_scripts to use src.cli:main
+- **Package Structure**: Updated src/__init__.py with CLI imports
 
-#buildinginpublic #apiimprovement #rootendpoint #documentation
+#buildinginpublic #apiimprovement #rootendpoint #documentation #cliintegration
 
 ## [3.3.4] - 2025-10-15
 

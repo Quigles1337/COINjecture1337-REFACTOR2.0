@@ -69,8 +69,8 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "coinjectured=cli:main",
-            "coinjecture=cli:main",
+            "coinjectured=src.cli:main",
+            "coinjecture=src.cli:main",
         ],
     },
     include_package_data=True,

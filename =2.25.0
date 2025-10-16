@@ -1,6 +1,0 @@
-Defaulting to user installation because normal site-packages is not writeable
-Requirement already satisfied: requests in /Users/sarahmarin/Library/Python/3.9/lib/python/site-packages (2.31.0)
-Requirement already satisfied: urllib3<3,>=1.21.1 in /Users/sarahmarin/Library/Python/3.9/lib/python/site-packages (from requests) (2.5.0)
-Requirement already satisfied: certifi>=2017.4.17 in /Users/sarahmarin/Library/Python/3.9/lib/python/site-packages (from requests) (2025.8.3)
-Requirement already satisfied: idna<4,>=2.5 in /Users/sarahmarin/Library/Python/3.9/lib/python/site-packages (from requests) (3.10)
-Requirement already satisfied: charset-normalizer<4,>=2 in /Users/sarahmarin/Library/Python/3.9/lib/python/site-packages (from requests) (3.4.3)

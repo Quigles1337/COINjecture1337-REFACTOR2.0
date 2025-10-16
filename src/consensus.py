@@ -144,16 +144,25 @@ class ConsensusEngine:
     
     def _calculate_genesis_hash(self) -> str:
         """Calculate deterministic genesis block hash."""
-        genesis_data = f"{self.config.network_id}_{self.config.genesis_timestamp}_{self.config.genesis_seed}"
+        # Creator initials (SM) hidden in hash calculation
+        creator_initials = "SM"
+        genesis_data = f"{self.config.network_id}_{self.config.genesis_timestamp}_{self.config.genesis_seed}_{creator_initials}"
         return hashlib.sha256(genesis_data.encode()).hexdigest()
     
     def _build_genesis(self) -> Block:
         """
-        Build deterministic genesis block.
+        Build deterministic immutable genesis block with IPFS integration.
         
         Returns:
-            Genesis block
+            Genesis block with immutable IPFS parameters
         """
+        print("🔨 Building immutable genesis block with IPFS integration...")
+        
+        # Add creator initials (SM) to genesis seed for immutability (hidden)
+        creator_initials = "SM"
+        enhanced_seed = f"{self.config.genesis_seed}_{creator_initials}"
+        print(f"🔨 Building immutable genesis block with IPFS integration...")
+        
         # Generate genesis problem
         try:
             from .core.blockchain import ProblemType
@@ -161,7 +170,7 @@ class ConsensusEngine:
             from core.blockchain import ProblemType
         genesis_problem = self.problem_registry.generate(
             problem_type=ProblemType.SUBSET_SUM,
-            seed=self.config.genesis_seed,
+            seed=enhanced_seed,
             capacity=ProblemTier.TIER_1_MOBILE
         )
         
@@ -229,12 +238,17 @@ class ConsensusEngine:
             print(f"⚠️  Warning: Could not upload proof bundle to IPFS: {e}")
             cid = None
         
-        # Create genesis block with IPFS CID
+        # Create immutable genesis block with IPFS CID (creator initials hidden in seed)
+        genesis_transactions = [
+            "COINjecture blockchain initialized",
+            "Immutable genesis with IPFS integration"
+        ]
+        
         genesis_block = Block(
             index=0,
             timestamp=self.config.genesis_timestamp,
             previous_hash="0" * 64,
-            transactions=[],
+            transactions=genesis_transactions,
             merkle_root="0" * 64,
             problem=genesis_problem,
             solution=genesis_solution,
@@ -245,6 +259,7 @@ class ConsensusEngine:
             offchain_cid=cid  # Include the IPFS CID in constructor
         )
         
+        print(f"🔒 Immutable genesis block created with IPFS CID: {cid}")
         return genesis_block
     
     def validate_header(self, block: Block) -> bool:

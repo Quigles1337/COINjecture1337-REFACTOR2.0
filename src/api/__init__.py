@@ -5,5 +5,5 @@ Provides a one-way faucet API for streaming blockchain data.
 Implements the specification from FAUCET_API.README.md.
 """
 
-__version__ = "3.3.5"
+__version__ = "3.3.7"
 __author__ = "COINjecture"
