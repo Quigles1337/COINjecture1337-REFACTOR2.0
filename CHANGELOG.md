@@ -5,6 +5,47 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.2] - 2025-10-15
+
+### Added
+- **CLI Module Implementation** - Complete command-line interface per docs/blockchain/cli.md
+- **User Submissions CLI Commands** - Full CLI support for problem submission management
+- **Node Management Commands** - init, run, mine commands with proper configuration
+- **Blockchain Interaction Commands** - get-block, get-proof commands for data access
+- **Network Management Commands** - add-peer, peers commands for network operations
+- **Comprehensive Help System** - Detailed help text and examples for all commands
+
+### Technical Details
+- Created `src/cli.py` with complete CLI implementation
+- Added all required commands from specification: init, run, mine, get-block, get-proof, add-peer, peers
+- Added user submissions commands: submit-problem, check-submission, list-submissions
+- Implemented proper argument parsing with argparse
+- Added JSON and pretty-print output formats
+- Integrated with Node module for full functionality
+- Added comprehensive error handling and exit codes
+
+### CLI Commands Available
+- `coinjectured init --role [light|full|miner|archive] --data-dir DIR`
+- `coinjectured run --config PATH`
+- `coinjectured mine --config PATH --problem-type subset_sum --tier desktop`
+- `coinjectured get-block --hash HEX | --index INT | --latest`
+- `coinjectured get-proof --cid CID`
+- `coinjectured add-peer --multiaddr ADDR`
+- `coinjectured peers`
+- `coinjectured submit-problem --type subset_sum --bounty 100 --strategy BEST`
+- `coinjectured check-submission --id submission-123`
+- `coinjectured list-submissions`
+
+### Integration Verification
+- ✅ CLI module imports successfully
+- ✅ All commands parse arguments correctly
+- ✅ Node initialization works via CLI
+- ✅ Problem submission works via CLI
+- ✅ Submission listing works via CLI
+- ✅ Help system provides comprehensive documentation
+
+#buildinginpublic #blockchain #cli #usersubmissions
+
 ## [3.2.1] - 2025-10-15
 
 ### Fixed
