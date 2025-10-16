@@ -4,7 +4,12 @@ from typing import Optional, Tuple
 
 from .aggregation import AggregationStrategy
 from .submission import ProblemSubmission, SolutionRecord
-from ..Blockchain import HardwareType, ProblemTier
+
+# Import from core.blockchain instead of Blockchain
+try:
+    from ..core.blockchain import HardwareType, ProblemTier
+except ImportError:
+    from core.blockchain import HardwareType, ProblemTier
 
 
 @dataclass

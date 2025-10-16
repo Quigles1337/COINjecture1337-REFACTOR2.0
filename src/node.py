@@ -18,16 +18,25 @@ import os
 from pathlib import Path
 
 # Core blockchain imports
-from .core.blockchain import Block, ProblemType, ProblemTier
-from .pow import ProblemRegistry, DifficultyAdjuster
-from .storage import StorageManager, StorageConfig, IPFSClient
-from .consensus import ConsensusEngine, ConsensusConfig
-from .network import NetworkProtocol, NetworkConfig
-
-# User submissions integration
-from .user_submissions.pool import ProblemPool
-from .user_submissions.submission import ProblemSubmission, SolutionRecord
-from .user_submissions.aggregation import AggregationStrategy
+try:
+    from .core.blockchain import Block, ProblemType, ProblemTier
+    from .pow import ProblemRegistry, DifficultyAdjuster
+    from .storage import StorageManager, StorageConfig, IPFSClient
+    from .consensus import ConsensusEngine, ConsensusConfig
+    from .network import NetworkProtocol
+    from .user_submissions.pool import ProblemPool
+    from .user_submissions.submission import ProblemSubmission, SolutionRecord
+    from .user_submissions.aggregation import AggregationStrategy
+except ImportError:
+    # Fallback for direct execution
+    from core.blockchain import Block, ProblemType, ProblemTier
+    from pow import ProblemRegistry, DifficultyAdjuster
+    from storage import StorageManager, StorageConfig, IPFSClient
+    from consensus import ConsensusEngine, ConsensusConfig
+    from network import NetworkProtocol
+    from user_submissions.pool import ProblemPool
+    from user_submissions.submission import ProblemSubmission, SolutionRecord
+    from user_submissions.aggregation import AggregationStrategy
 
 
 class NodeRole(Enum):
@@ -161,12 +170,9 @@ class Node:
             )
             
             # Initialize network protocol
-            network_config = NetworkConfig(
-                listen_addr=self.config.listen_addr,
-                bootstrap_peers=self.config.bootstrap_peers,
-                network_id=self.config.network_id
-            )
-            self.network = NetworkProtocol(network_config)
+            # NetworkProtocol requires consensus, storage, and problem_registry
+            # We'll initialize it after consensus is created
+            self.network = None
             
             # Initialize user submissions system
             if self.config.enable_user_submissions:
@@ -197,8 +203,13 @@ class Node:
             self.storage.start()
             self.logger.info("Storage service started")
             
-            # Start network
-            self.network.start()
+            # Initialize and start network protocol
+            self.network = NetworkProtocol(
+                consensus=self.consensus,
+                storage=self.storage,
+                problem_registry=self.problem_registry,
+                peer_id=f"node-{self.config.role.value}"
+            )
             self.logger.info("Network service started")
             
             # Sync headers
@@ -223,7 +234,8 @@ class Node:
         self.mining_active = False
         
         if self.network:
-            self.network.stop()
+            # NetworkProtocol doesn't have a stop method, just set to None
+            self.network = None
         
         if self.storage:
             self.storage.stop()
@@ -473,8 +485,13 @@ class Node:
             Optional[str]: Submission ID if successful, None otherwise
         """
         if not self.problem_pool:
-            self.logger.error("User submissions not enabled")
-            return None
+            # Initialize problem pool if not already done
+            if self.config.enable_user_submissions:
+                self.problem_pool = ProblemPool()
+                self.logger.info("User submissions system initialized")
+            else:
+                self.logger.error("User submissions not enabled")
+                return None
         
         try:
             submission_id = f"submission-{int(time.time())}-{len(self.problem_pool.pending_problems)}"
@@ -511,7 +528,11 @@ class Node:
         if not self.problem_pool:
             return None
         
-        from .user_submissions.tracker import SubmissionTracker
+        try:
+            from .user_submissions.tracker import SubmissionTracker
+        except ImportError:
+            from user_submissions.tracker import SubmissionTracker
+        
         tracker = SubmissionTracker(self.problem_pool)
         return tracker.get_submission_status(submission_id)
     

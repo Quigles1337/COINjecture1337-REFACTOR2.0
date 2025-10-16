@@ -5,6 +5,31 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2025-10-15
+
+### Fixed
+- **Critical import errors** in Node module preventing proper integration
+- **Relative import issues** in user_submissions module causing ImportError
+- **NetworkProtocol initialization** corrected to use proper constructor parameters
+- **ProblemPool integration** now works correctly with lazy initialization
+- **SubmissionTracker imports** fixed with proper fallback handling
+
+### Technical Details
+- Fixed relative imports in `src/node.py` with try-except fallback pattern
+- Fixed `src/user_submissions/pool.py` import from `..Blockchain` to `..core.blockchain`
+- Corrected NetworkProtocol initialization to use consensus, storage, problem_registry parameters
+- Added lazy initialization for ProblemPool in submit_problem method
+- All Node integration tests now pass successfully
+
+### Integration Verification
+- ✅ Node module imports successfully
+- ✅ Problem submission works correctly
+- ✅ Submission status checking functional
+- ✅ Active submissions listing works
+- ✅ User submissions fully integrated into Node lifecycle
+
+#buildinginpublic #blockchain #node #bugfix
+
 ## [3.2.0] - 2025-10-15
 
 ### Added
