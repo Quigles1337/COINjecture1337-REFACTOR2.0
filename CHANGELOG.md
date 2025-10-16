@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Genesis block now properly generates and stores proof data**
 - **IPFS integration in StorageManager** properly utilized for proof storage
 - **Block serialization** now includes offchain_cid field
+- **Dataclass field order** in Block class to fix Python dataclass validation
 
 ### Documentation
 - **API responses now demonstrate real NP-complete problem solving**

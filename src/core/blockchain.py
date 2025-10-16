@@ -655,11 +655,11 @@ class Block:
     # Cumulative Work Score (New field)
     cumulative_work_score: float
 
-    # IPFS CID for full proof bundle
-    offchain_cid: Optional[str] = None
-
     # Block hash (deterministic from contents)
     block_hash: str
+
+    # IPFS CID for full proof bundle
+    offchain_cid: Optional[str] = None
 
     def calculate_hash(self) -> str:
         """Block hash is deterministic from key contents."""
