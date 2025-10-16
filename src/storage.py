@@ -94,7 +94,7 @@ class IPFSClient:
         
         for attempt in range(self.max_retries):
             try:
-                if method == "POST" and data:
+                if method == "POST":
                     response = requests.post(url, data=data, timeout=self.timeout)
                 else:
                     response = requests.get(url, timeout=self.timeout)

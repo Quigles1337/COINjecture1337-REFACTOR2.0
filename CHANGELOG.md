@@ -5,6 +5,20 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.10] - 2025-10-15
+
+### Fixed
+- **IPFS POST request logic** fixed to properly send POST requests without data
+- **IPFS health check** now correctly uses POST method for /api/v0/version endpoint
+- **Proof bundle storage** should now pass health checks and upload successfully
+
+### Technical Details
+- Fixed _make_request method to send POST requests even when data is None
+- Previous logic only sent POST when data was provided, causing fallback to GET
+- Should resolve 405 Method Not Allowed errors in IPFS health checks
+
+#buildinginpublic #blockchain #bugfix
+
 ## [3.1.9] - 2025-10-15
 
 ### Fixed
