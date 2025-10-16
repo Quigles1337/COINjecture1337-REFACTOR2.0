@@ -29,10 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Import path issues in API modules
 - IPFS health check method compatibility
 - Flask-Limiter dependency installation
+- All API components tested and verified working
 
 ### Documentation
 - Complete API documentation in `FAUCET_API.README.md`
 - Deployment files: `Procfile`, `runtime.txt`, `.env.example`
+- Comprehensive deployment guide for DigitalOcean (`DEPLOYMENT.md`)
 - All API endpoints include comprehensive docstrings
 - Test suites for all API components
 
@@ -41,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production-ready with nginx reverse proxy configuration
 - Systemd service files for auto-restart
 - #buildinginpublic launch ready
+- All endpoints tested and verified: health, latest block, specific block, block range
+- Rate limiting tested and functional
 
 ## [3.0.4] - 2025-10-15
 
