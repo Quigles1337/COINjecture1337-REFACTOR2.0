@@ -248,7 +248,7 @@ class RealP2PMiningNode:
                 solution=solution,
                 complexity=complexity,
                 mining_capacity=ProblemTier.TIER_2_DESKTOP,
-                cumulative_work_score=complexity.measured_solve_time * 100,  # Simple work score
+                cumulative_work_score=max(complexity.measured_solve_time * 1000, problem['size'] * 0.1),  # Work score based on solve time and problem size
                 block_hash="",  # Will be calculated
                 offchain_cid=None
             )
@@ -276,7 +276,7 @@ class RealP2PMiningNode:
                         'complexity': {
                             'solve_time': solve_time,
                             'verify_time': verify_time,
-                            'work_score': complexity.measured_solve_time * 100
+                            'work_score': max(complexity.measured_solve_time * 1000, problem['size'] * 0.1)
                         }
                     }
                     import json
@@ -361,8 +361,9 @@ class RealP2PMiningNode:
                 timeout=10
             )
             
-            if response.status_code == 200:
+            if response.status_code in [200, 202]:
                 logger.info("✅ Block submitted successfully to network")
+                logger.info(f"💰 Mining rewards will be sent to: {self.wallet.address}")
                 return True
             elif response.status_code == 429:
                 logger.warning("⏳ Rate limited, waiting before retry...")

@@ -5,6 +5,18 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.1] - 2025-10-17
+
+### Fixed
+- Work Score Calculation: Fixed work score calculation to properly reflect computational work done
+- Power Cycle Issue: Resolved cached code issues preventing proper work score calculation
+- Mining Node Status: Mining node now correctly reports work scores > 0.00
+
+### Technical Details
+- Work score now calculated as `max(solve_time * 1000, problem_size * 0.1)`
+- Ensures meaningful work scores even for fast problem solving
+- Proper cache clearing to ensure latest code is executed
+
 ## [3.8.0] - 2025-10-17
 
 ### Added
