@@ -165,6 +165,10 @@ Examples:
         self._add_ipfs_retrieve_command(subparsers)
         self._add_ipfs_status_command(subparsers)
         
+        # Rewards commands
+        self._add_rewards_command(subparsers)
+        self._add_leaderboard_command(subparsers)
+        
         return parser
     
     def _add_init_command(self, subparsers):
@@ -2273,6 +2277,98 @@ Examples:
             return 0
         except Exception as e:
             print(f"❌ Error checking IPFS status: {e}")
+            return 1
+    
+    def _add_rewards_command(self, subparsers):
+        """Add rewards command parser."""
+        parser = subparsers.add_parser('rewards', help='Check mining rewards')
+        parser.add_argument('--address', help='Miner address to check rewards for')
+        parser.add_argument('--wallet', help='Wallet file to get address from')
+    
+    def _add_leaderboard_command(self, subparsers):
+        """Add leaderboard command parser."""
+        subparsers.add_parser('leaderboard', help='Show mining leaderboard')
+    
+    def _handle_rewards(self, args) -> int:
+        """Handle rewards command."""
+        try:
+            import requests
+            
+            # Get miner address
+            miner_address = args.address
+            if not miner_address and args.wallet:
+                try:
+                    from tokenomics.wallet import Wallet
+                    wallet = Wallet.load_from_file(args.wallet)
+                    miner_address = wallet.address
+                except Exception as e:
+                    print(f"❌ Error loading wallet: {e}")
+                    return 1
+            
+            if not miner_address:
+                print("❌ Please provide either --address or --wallet")
+                return 1
+            
+            # Query rewards API
+            response = requests.get(f"http://167.172.213.70:5000/v1/rewards/{miner_address}", timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()['data']
+                print(f"💰 Mining Rewards for {miner_address[:16]}...")
+                print(f"   Total Rewards: {data['total_rewards']} COIN")
+                print(f"   Blocks Mined: {data['blocks_mined']}")
+                print(f"   Total Work Score: {data['total_work_score']}")
+                print(f"   Average Work Score: {data['average_work_score']}")
+                
+                if data['rewards_breakdown']:
+                    print(f"\n📊 Rewards Breakdown:")
+                    for reward in data['rewards_breakdown'][:5]:  # Show last 5 blocks
+                        print(f"   Block #{reward['block_index']}: {reward['total_reward']} COIN")
+                        print(f"     Base: {reward['base_reward']} COIN, Work Bonus: {reward['work_bonus']} COIN")
+                        print(f"     Work Score: {reward['work_score']}, Hash: {reward['block_hash'][:16]}...")
+                
+                return 0
+            else:
+                print(f"❌ Error getting rewards: {response.status_code}")
+                print(f"Response: {response.text}")
+                return 1
+                
+        except Exception as e:
+            print(f"❌ Error checking rewards: {e}")
+            return 1
+    
+    def _handle_leaderboard(self, args) -> int:
+        """Handle leaderboard command."""
+        try:
+            import requests
+            
+            # Query leaderboard API
+            response = requests.get("http://167.172.213.70:5000/v1/rewards/leaderboard", timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()['data']
+                print(f"🏆 Mining Leaderboard")
+                print(f"   Total Miners: {data['total_miners']}")
+                print(f"   Total Blocks: {data['total_blocks']}")
+                print(f"   Total Rewards Distributed: {data['total_rewards_distributed']} COIN")
+                
+                if data['leaderboard']:
+                    print(f"\n📈 Top Miners:")
+                    for i, miner in enumerate(data['leaderboard'][:10], 1):
+                        print(f"   #{i} {miner['address'][:16]}...")
+                        print(f"      Rewards: {miner['total_rewards']} COIN")
+                        print(f"      Blocks: {miner['blocks_mined']}")
+                        print(f"      Work Score: {miner['total_work_score']}")
+                        print(f"      Avg Work Score: {miner['average_work_score']}")
+                
+                return 0
+            else:
+                print(f"❌ Error getting leaderboard: {response.status_code}")
+                print(f"Response: {response.text}")
+                return 1
+                
+        except Exception as e:
+            print(f"❌ Error checking leaderboard: {e}")
             return 1
 
 

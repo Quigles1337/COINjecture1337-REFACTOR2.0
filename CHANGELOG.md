@@ -5,6 +5,31 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.6] - 2025-10-17
+
+### Added
+- **Mining Rewards System**: Added comprehensive rewards tracking and display
+  - New API endpoints: `/v1/rewards/<address>` and `/v1/rewards/leaderboard`
+  - Individual miner rewards with detailed breakdown (base reward + work bonus)
+  - Mining leaderboard showing top miners by total rewards
+  - CLI commands: `rewards` and `leaderboard` for easy access
+
+### Technical Details
+- **Rewards Calculation**: 50 COIN base reward + 0.1 COIN per work score point
+- **API Endpoints**: 
+  - `GET /v1/rewards/<address>` - Get rewards for specific miner
+  - `GET /v1/rewards/leaderboard` - Get top miners leaderboard
+- **CLI Integration**: 
+  - `python3 src/cli.py rewards --address <address>` - Check miner rewards
+  - `python3 src/cli.py leaderboard` - Show mining leaderboard
+- **Data Display**: Shows total rewards, blocks mined, work scores, and detailed breakdown
+
+### Testing Results
+- **API Endpoints**: Successfully deployed and tested on DigitalOcean droplet
+- **Rewards Display**: Shows 100.26 COIN total rewards for test miner
+- **Leaderboard**: Displays top miners with comprehensive statistics
+- **CLI Commands**: Both rewards and leaderboard commands working perfectly
+
 ## [3.9.5] - 2025-10-17
 
 ### Fixed
