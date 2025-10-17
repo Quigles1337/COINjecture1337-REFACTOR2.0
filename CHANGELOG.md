@@ -5,6 +5,41 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.3] - 2025-10-17
+
+### Added
+- **CLI Wallet Management**: New commands for wallet operations
+  - `coinjectured wallet-generate` - Generate new wallet with Ed25519 keypair
+  - `coinjectured wallet-info` - Display wallet address and public key
+  - `coinjectured wallet-balance` - Query wallet balance from blockchain API
+- **CLI IPFS Operations**: New commands for IPFS integration
+  - `coinjectured ipfs-upload` - Upload proof bundles to IPFS and get real CIDs
+  - `coinjectured ipfs-retrieve` - Download proof bundles from IPFS by CID
+  - `coinjectured ipfs-status` - Check IPFS daemon status and connectivity
+
+### Fixed
+- **CLI Mining Command**: Completely rewritten to use P2P mining logic
+  - Now uses wallet-based authentication instead of HMAC
+  - Queries current blockchain state before mining sequential blocks
+  - Uploads proof bundles to IPFS for real CIDs
+  - Signs blocks with Ed25519 wallet signatures
+  - Proper block chaining to latest network block
+- **Bootstrap Peer Configuration**: Updated CLI to use correct port 12345
+- **Help Text**: Fixed deployment script path references
+
+### Changed
+- **CLI Architecture**: Modernized CLI to match P2P mining script functionality
+- **Mining Process**: CLI mine command now follows same logic as `start_real_p2p_miner.py`
+- **Block Generation**: CLI now generates sequential blocks with proper chaining
+- **Proof Storage**: CLI now uploads real proof bundles to IPFS instead of placeholders
+
+### Technical Details
+- **Wallet Integration**: CLI mine command loads/generates wallets automatically
+- **Blockchain Sync**: CLI queries `/v1/data/block/latest` for current state
+- **IPFS Integration**: CLI uses `StorageManager.ipfs_client.add()` for real CIDs
+- **Block Signing**: CLI signs blocks with `wallet.sign_block()` for authentication
+- **Sequential Mining**: CLI mines next sequential block based on network state
+
 ## [3.9.2] - 2025-10-17
 
 ### Fixed

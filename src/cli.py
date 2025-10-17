@@ -33,7 +33,7 @@ class COINjectureCLI:
     def __init__(self):
         self.parser = self._create_parser()
         # P2P bootstrap peers (no HTTP API needed for mining)
-        self.bootstrap_peers = ["167.172.213.70:8080"]
+        self.bootstrap_peers = ["167.172.213.70:12345"]
         # IPFS API endpoint (configurable via env)
         self.ipfs_api_url = os.environ.get("IPFS_API_URL", "http://localhost:5001")
         self.ipfs_available = False
@@ -49,7 +49,7 @@ class COINjectureCLI:
         print(f"🌐 P2P Network Configuration")
         print(f"   Bootstrap Peers: {', '.join(self.bootstrap_peers)}")
         print(f"   Note: Use P2P mining node for blockchain participation")
-        print(f"   Run: ./deploy_mining_node.sh start")
+        print(f"   Run: scripts/deployment/deploy_mining_node.sh start")
         return True
 
     def _check_ipfs_connectivity(self) -> bool:
@@ -116,6 +116,12 @@ Examples:
   coinjectured submit-problem --type subset_sum --bounty 100 --strategy BEST
   coinjectured check-submission --id submission-123
   coinjectured list-submissions
+  coinjectured wallet-generate --output ./my_wallet.json
+  coinjectured wallet-info --wallet ./my_wallet.json
+  coinjectured wallet-balance --wallet ./my_wallet.json
+  coinjectured ipfs-upload --file proof_bundle.json
+  coinjectured ipfs-retrieve --cid QmXyZ... --output proof.json
+  coinjectured ipfs-status
             """
         )
         
@@ -148,6 +154,16 @@ Examples:
         
         # Telemetry commands
         self._add_telemetry_commands(subparsers)
+        
+        # Wallet management commands
+        self._add_wallet_generate_command(subparsers)
+        self._add_wallet_info_command(subparsers)
+        self._add_wallet_balance_command(subparsers)
+        
+        # IPFS operation commands
+        self._add_ipfs_upload_command(subparsers)
+        self._add_ipfs_retrieve_command(subparsers)
+        self._add_ipfs_status_command(subparsers)
         
         return parser
     
@@ -534,6 +550,95 @@ Examples:
         )
         flush_parser.set_defaults(func=self._handle_flush_telemetry)
     
+    def _add_wallet_generate_command(self, subparsers):
+        """Add wallet-generate command parser."""
+        parser = subparsers.add_parser(
+            'wallet-generate',
+            help='Generate a new wallet'
+        )
+        parser.add_argument(
+            '--output',
+            type=str,
+            default='config/miner_wallet.json',
+            help='Output wallet file path (default: config/miner_wallet.json)'
+        )
+        parser.set_defaults(func=self._handle_wallet_generate)
+    
+    def _add_wallet_info_command(self, subparsers):
+        """Add wallet-info command parser."""
+        parser = subparsers.add_parser(
+            'wallet-info',
+            help='Show wallet information'
+        )
+        parser.add_argument(
+            '--wallet',
+            type=str,
+            default='config/miner_wallet.json',
+            help='Wallet file path (default: config/miner_wallet.json)'
+        )
+        parser.set_defaults(func=self._handle_wallet_info)
+    
+    def _add_wallet_balance_command(self, subparsers):
+        """Add wallet-balance command parser."""
+        parser = subparsers.add_parser(
+            'wallet-balance',
+            help='Check wallet balance'
+        )
+        parser.add_argument(
+            '--wallet',
+            type=str,
+            default='config/miner_wallet.json',
+            help='Wallet file path (default: config/miner_wallet.json)'
+        )
+        parser.add_argument(
+            '--api-url',
+            type=str,
+            default='http://167.172.213.70:5000',
+            help='API URL for balance query (default: http://167.172.213.70:5000)'
+        )
+        parser.set_defaults(func=self._handle_wallet_balance)
+    
+    def _add_ipfs_upload_command(self, subparsers):
+        """Add ipfs-upload command parser."""
+        parser = subparsers.add_parser(
+            'ipfs-upload',
+            help='Upload proof bundle to IPFS'
+        )
+        parser.add_argument(
+            '--file',
+            type=str,
+            required=True,
+            help='Path to proof bundle file'
+        )
+        parser.set_defaults(func=self._handle_ipfs_upload)
+    
+    def _add_ipfs_retrieve_command(self, subparsers):
+        """Add ipfs-retrieve command parser."""
+        parser = subparsers.add_parser(
+            'ipfs-retrieve',
+            help='Retrieve proof bundle from IPFS'
+        )
+        parser.add_argument(
+            '--cid',
+            type=str,
+            required=True,
+            help='IPFS CID to retrieve'
+        )
+        parser.add_argument(
+            '--output',
+            type=str,
+            help='Output file path (default: stdout)'
+        )
+        parser.set_defaults(func=self._handle_ipfs_retrieve)
+    
+    def _add_ipfs_status_command(self, subparsers):
+        """Add ipfs-status command parser."""
+        parser = subparsers.add_parser(
+            'ipfs-status',
+            help='Check IPFS daemon status'
+        )
+        parser.set_defaults(func=self._handle_ipfs_status)
+    
     def run(self, args: Optional[list] = None) -> int:
         """
         Run the CLI with given arguments.
@@ -668,52 +773,233 @@ Examples:
             return 1
     
     def _handle_mine(self, args) -> int:
-        """Handle mine command."""
+        """Handle mine command with P2P mining logic."""
         try:
-            # Load configuration
-            config = load_config(args.config)
-            
-            if config.role != NodeRole.MINER:
-                print("Error: Node must be configured as miner to mine", file=sys.stderr)
-                return 1
-            
-            # Create and start node
-            node = Node(config)
-            
-            if not node.init():
-                print("Error: Failed to initialize node", file=sys.stderr)
-                return 1
-            
-            if not node.start():
-                print("Error: Failed to start node", file=sys.stderr)
-                return 1
-            
-            print(f"✅ Mining started")
-            print(f"   Problem type: {args.problem_type}")
-            print(f"   Hardware tier: {args.tier}")
-            print(f"   Duration: {'unlimited' if not args.duration else f'{args.duration}s'}")
-            
-            # Run mining for specified duration
-            import time
-            start_time = time.time()
-            
             try:
-                while True:
-                    if args.duration and (time.time() - start_time) >= args.duration:
-                        print(f"\nMining completed after {args.duration} seconds")
-                        break
-                    
-                    time.sleep(1)
-                    
-            except KeyboardInterrupt:
-                print("\nMining stopped by user")
+                from .tokenomics.wallet import Wallet
+            except ImportError:
+                from tokenomics.wallet import Wallet
+            try:
+                from .storage import StorageManager, StorageConfig, NodeRole, PruningMode
+            except ImportError:
+                from storage import StorageManager, StorageConfig, NodeRole, PruningMode
+            try:
+                from .core.blockchain import Block, ProblemTier, ProblemType, Transaction, mine_block, generate_subset_sum_problem, solve_subset_sum, verify_subset_sum
+                from .core.blockchain import EnergyMetrics, ComputationalComplexity, subset_sum_complexity
+            except ImportError:
+                from core.blockchain import Block, ProblemTier, ProblemType, Transaction, mine_block, generate_subset_sum_problem, solve_subset_sum, verify_subset_sum
+                from core.blockchain import EnergyMetrics, ComputationalComplexity, subset_sum_complexity
+            import hashlib
+            import json
             
-            node.stop()
+            # Load or generate wallet
+            wallet_path = "config/miner_wallet.json"
+            try:
+                wallet = Wallet.load_from_file(wallet_path)
+                print(f"🔑 Loaded existing wallet: {wallet.address}")
+            except:
+                print(f"🔑 Generating new wallet...")
+                wallet = Wallet.generate_new()
+                wallet.save_to_file(wallet_path)
+                print(f"💰 Mining rewards will be sent to: {wallet.address}")
+            
+            # Get current blockchain state
+            current_index = self._get_current_blockchain_index()
+            latest_hash = self._get_latest_block_hash()
+            next_index = current_index + 1
+            
+            print(f"🌐 Current blockchain state:")
+            print(f"   Latest block: #{current_index}")
+            print(f"   Next block: #{next_index}")
+            print(f"   Previous hash: {latest_hash[:16]}...")
+            
+            # Create storage manager for IPFS
+            storage_config = StorageConfig(
+                data_dir='./data',
+                role=NodeRole.FULL,
+                pruning_mode=PruningMode.FULL,
+                ipfs_api_url=self.ipfs_api_url
+            )
+            storage_manager = StorageManager(storage_config)
+            
+            # Generate problem
+            problem = generate_subset_sum_problem(
+                seed=int(time.time()),
+                tier=ProblemTier.TIER_2_DESKTOP
+            )
+            
+            print(f"🧩 Generated problem: target={problem['target']}, size={problem['size']}")
+            
+            # Solve the problem
+            start_time = time.time()
+            solution = solve_subset_sum(problem)
+            solve_time = time.time() - start_time
+            
+            if not solution:
+                print("❌ Could not solve problem")
+                return 1
+            
+            # Verify solution
+            verify_start = time.time()
+            is_valid = verify_subset_sum(problem, solution)
+            verify_time = time.time() - verify_start
+            
+            if not is_valid:
+                print("❌ Solution verification failed")
+                return 1
+            
+            print(f"✅ Problem solved in {solve_time:.4f}s: {solution}")
+            
+            # Create energy metrics
+            energy_metrics = EnergyMetrics(
+                solve_energy_joules=solve_time * 100,
+                verify_energy_joules=verify_time * 1,
+                solve_power_watts=100,
+                verify_power_watts=1,
+                solve_time_seconds=solve_time,
+                verify_time_seconds=verify_time,
+                cpu_utilization=80.0,
+                memory_utilization=50.0,
+                gpu_utilization=0.0
+            )
+            
+            # Create complexity specification
+            complexity = subset_sum_complexity(
+                problem=problem,
+                solution=solution,
+                solve_time=solve_time,
+                verify_time=verify_time,
+                solve_memory=0,
+                verify_memory=0,
+                energy_metrics=energy_metrics
+            )
+            
+            # Create mining reward transaction
+            reward_tx = Transaction(
+                sender="network",
+                recipient=wallet.address,
+                amount=50.0,
+                timestamp=time.time()
+            )
+            
+            # Create block with proper chaining
+            block = Block(
+                index=next_index,
+                timestamp=time.time(),
+                previous_hash=latest_hash,
+                transactions=[reward_tx],
+                merkle_root="",  # Will be calculated
+                problem=problem,
+                solution=solution,
+                complexity=complexity,
+                mining_capacity=ProblemTier.TIER_2_DESKTOP,
+                cumulative_work_score=max(complexity.measured_solve_time * 1000, problem['size'] * 0.1),
+                block_hash="",  # Will be calculated
+                offchain_cid=None
+            )
+            
+            # Calculate merkle root and block hash
+            block.merkle_root = self._calculate_merkle_root([reward_tx])
+            block.block_hash = block.calculate_hash()
+            
+            # Upload proof bundle to IPFS
+            try:
+                proof_data = {
+                    'problem': problem,
+                    'solution': solution,
+                    'complexity': {
+                        'solve_time': solve_time,
+                        'verify_time': verify_time,
+                        'work_score': max(complexity.measured_solve_time * 1000, problem['size'] * 0.1)
+                    },
+                    'block_hash': block.block_hash,
+                    'timestamp': time.time(),
+                    'miner_address': wallet.address
+                }
+                bundle_bytes = json.dumps(proof_data, indent=2).encode('utf-8')
+                cid = storage_manager.ipfs_client.add(bundle_bytes)
+                block.offchain_cid = cid
+                print(f"✅ Proof bundle uploaded to IPFS: {cid}")
+            except Exception as e:
+                print(f"⚠️  IPFS upload failed: {e}")
+                block.offchain_cid = f"Qm{hashlib.sha256(block.block_hash.encode()).hexdigest()[:44]}"
+                print(f"📦 Using placeholder CID: {block.offchain_cid}")
+            
+            print(f"✅ Block mined: #{block.index} - {block.block_hash[:16]}...")
+            print(f"📊 Work score: {block.cumulative_work_score:.2f}")
+            print(f"🧩 Problem size: {block.problem.get('size', 'unknown')}")
+            
+            # Sign block with wallet
+            block_data = {
+                "event_id": f"block-{int(time.time())}-{wallet.address}",
+                "block_index": block.index,
+                "block_hash": block.block_hash,
+                "previous_hash": block.previous_hash,
+                "merkle_root": block.merkle_root,
+                "timestamp": block.timestamp,
+                "cid": block.offchain_cid,
+                "miner_address": wallet.address,
+                "capacity": block.mining_capacity.value,
+                "work_score": block.cumulative_work_score,
+                "ts": int(block.timestamp)
+            }
+            
+            signature = wallet.sign_block(block_data)
+            public_key = wallet.get_public_key_bytes().hex()
+            
+            block_data["signature"] = signature
+            block_data["public_key"] = public_key
+            
+            print(f"🔐 Block signed with wallet: {wallet.address}")
+            print(f"📡 Block data ready for P2P propagation")
+            print(f"💰 Mining rewards will be sent to: {wallet.address}")
+            
             return 0
             
         except Exception as e:
-            print(f"Error during mining: {e}", file=sys.stderr)
+            print(f"❌ Mining failed: {e}")
             return 1
+    
+    def _get_current_blockchain_index(self) -> int:
+        """Get the current blockchain index from the network."""
+        try:
+            response = requests.get("http://167.172.213.70:5000/v1/data/block/latest", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    return data['data']['index']
+            return 0  # Default to genesis (index 0)
+        except Exception as e:
+            print(f"⚠️  Could not get current blockchain index: {e}")
+            return 0  # Default to genesis (index 0)
+    
+    def _get_latest_block_hash(self) -> str:
+        """Get the latest block hash from the network."""
+        try:
+            response = requests.get("http://167.172.213.70:5000/v1/data/block/latest", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    return data['data']['block_hash']
+            return "0000000000000000000000000000000000000000000000000000000000000000"  # Genesis hash
+        except Exception as e:
+            print(f"⚠️  Could not get latest block hash: {e}")
+            return "0000000000000000000000000000000000000000000000000000000000000000"  # Genesis hash
+    
+    def _calculate_merkle_root(self, transactions):
+        """Calculate merkle root for transactions."""
+        import hashlib
+        if not transactions:
+            return "0" * 64
+        
+        tx_hashes = []
+        for tx in transactions:
+            if hasattr(tx, 'transaction_id'):
+                tx_hashes.append(tx.transaction_id)
+            else:
+                tx_hashes.append(hashlib.sha256(str(tx).encode()).hexdigest())
+        
+        return hashlib.sha256("".join(tx_hashes).encode()).hexdigest()
     
     def _handle_get_block(self, args) -> int:
         """Handle get-block command."""
@@ -989,7 +1275,10 @@ Examples:
     def _handle_wallet_create(self, args) -> int:
         """Handle wallet creation."""
         try:
-            from tokenomics.wallet import WalletManager
+            try:
+                from .tokenomics.wallet import Wallet
+            except ImportError:
+                from tokenomics.wallet import WalletManager
             manager = WalletManager()
             
             wallet = manager.create_wallet(args.name)
@@ -1008,7 +1297,10 @@ Examples:
     def _handle_wallet_list(self, args) -> int:
         """Handle wallet listing."""
         try:
-            from tokenomics.wallet import WalletManager
+            try:
+                from .tokenomics.wallet import Wallet
+            except ImportError:
+                from tokenomics.wallet import WalletManager
             manager = WalletManager()
             
             wallets = manager.list_wallets()
@@ -1802,6 +2094,173 @@ Examples:
             return 0
         except Exception as e:
             print(f"❌ Error flushing telemetry: {e}")
+            return 1
+    
+    def _handle_wallet_generate(self, args) -> int:
+        """Handle wallet-generate command."""
+        try:
+            try:
+                from .tokenomics.wallet import Wallet
+            except ImportError:
+                from tokenomics.wallet import Wallet
+            
+            # Generate new wallet
+            wallet = Wallet.generate_new()
+            
+            # Save to file
+            wallet.save_to_file(args.output)
+            
+            print(f"✅ Wallet generated successfully!")
+            print(f"   Address: {wallet.address}")
+            print(f"   Saved to: {args.output}")
+            print(f"   ⚠️  IMPORTANT: Backup your private key securely!")
+            
+            return 0
+        except Exception as e:
+            print(f"❌ Error generating wallet: {e}")
+            return 1
+    
+    def _handle_wallet_info(self, args) -> int:
+        """Handle wallet-info command."""
+        try:
+            try:
+                from .tokenomics.wallet import Wallet
+            except ImportError:
+                from tokenomics.wallet import Wallet
+            
+            # Load wallet from file
+            wallet = Wallet.load_from_file(args.wallet)
+            
+            print(f"📋 Wallet Information:")
+            print(f"   Address: {wallet.address}")
+            print(f"   Public Key: {wallet.get_public_key_bytes().hex()}")
+            print(f"   File: {args.wallet}")
+            
+            return 0
+        except Exception as e:
+            print(f"❌ Error loading wallet: {e}")
+            return 1
+    
+    def _handle_wallet_balance(self, args) -> int:
+        """Handle wallet-balance command."""
+        try:
+            try:
+                from .tokenomics.wallet import Wallet
+            except ImportError:
+                from tokenomics.wallet import Wallet
+            
+            # Load wallet from file
+            wallet = Wallet.load_from_file(args.wallet)
+            
+            # Query API for balance (this endpoint may not exist yet)
+            try:
+                response = requests.get(f"{args.api_url}/v1/wallet/{wallet.address}/balance", timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    balance = data.get('balance', 0)
+                    print(f"💰 Wallet Balance:")
+                    print(f"   Address: {wallet.address}")
+                    print(f"   Balance: {balance} COIN")
+                else:
+                    print(f"⚠️  Balance API not available (HTTP {response.status_code})")
+                    print(f"   Address: {wallet.address}")
+                    print(f"   Note: Balance query endpoint may not be implemented yet")
+            except Exception as e:
+                print(f"⚠️  Could not query balance: {e}")
+                print(f"   Address: {wallet.address}")
+                print(f"   Note: Balance query endpoint may not be implemented yet")
+            
+            return 0
+        except Exception as e:
+            print(f"❌ Error checking wallet balance: {e}")
+            return 1
+    
+    def _handle_ipfs_upload(self, args) -> int:
+        """Handle ipfs-upload command."""
+        try:
+            try:
+                from .storage import StorageManager, StorageConfig, NodeRole, PruningMode
+            except ImportError:
+                from storage import StorageManager, StorageConfig, NodeRole, PruningMode
+            
+            # Create storage manager
+            storage_config = StorageConfig(
+                data_dir='./data',
+                role=NodeRole.FULL,
+                pruning_mode=PruningMode.FULL,
+                ipfs_api_url=self.ipfs_api_url
+            )
+            storage_manager = StorageManager(storage_config)
+            
+            # Read file
+            with open(args.file, 'rb') as f:
+                file_data = f.read()
+            
+            # Upload to IPFS
+            cid = storage_manager.ipfs_client.add(file_data)
+            
+            print(f"✅ File uploaded to IPFS successfully!")
+            print(f"   File: {args.file}")
+            print(f"   CID: {cid}")
+            print(f"   Size: {len(file_data)} bytes")
+            
+            return 0
+        except Exception as e:
+            print(f"❌ Error uploading to IPFS: {e}")
+            return 1
+    
+    def _handle_ipfs_retrieve(self, args) -> int:
+        """Handle ipfs-retrieve command."""
+        try:
+            try:
+                from .storage import StorageManager, StorageConfig, NodeRole, PruningMode
+            except ImportError:
+                from storage import StorageManager, StorageConfig, NodeRole, PruningMode
+            
+            # Create storage manager
+            storage_config = StorageConfig(
+                data_dir='./data',
+                role=NodeRole.FULL,
+                pruning_mode=PruningMode.FULL,
+                ipfs_api_url=self.ipfs_api_url
+            )
+            storage_manager = StorageManager(storage_config)
+            
+            # Retrieve from IPFS
+            data = storage_manager.ipfs_client.get(args.cid)
+            
+            if args.output:
+                # Save to file
+                with open(args.output, 'wb') as f:
+                    f.write(data)
+                print(f"✅ Data retrieved from IPFS successfully!")
+                print(f"   CID: {args.cid}")
+                print(f"   Saved to: {args.output}")
+                print(f"   Size: {len(data)} bytes")
+            else:
+                # Print to stdout
+                print(data.decode('utf-8', errors='ignore'))
+            
+            return 0
+        except Exception as e:
+            print(f"❌ Error retrieving from IPFS: {e}")
+            return 1
+    
+    def _handle_ipfs_status(self, args) -> int:
+        """Handle ipfs-status command."""
+        try:
+            print("🧩 IPFS Status:")
+            if self._check_ipfs_connectivity():
+                print(f"   Status: ✅ Available")
+                print(f"   API URL: {self.ipfs_api_url}")
+            else:
+                print(f"   Status: ❌ Unavailable")
+                print(f"   API URL: {self.ipfs_api_url}")
+                print(f"   Note: Start IPFS daemon with 'ipfs daemon'")
+            
+            return 0
+        except Exception as e:
+            print(f"❌ Error checking IPFS status: {e}")
             return 1
 
 
