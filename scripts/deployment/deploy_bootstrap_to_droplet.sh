@@ -72,7 +72,7 @@ deploy_bootstrap_node() {
     
     # Copy bootstrap node files
     log "Copying bootstrap node files..."
-    scp start_bootstrap_node.py $DROPLET_USER@$DROPLET_IP:/opt/coinjecture-bootstrap/
+    scp scripts/bootstrap/start_bootstrap_node.py $DROPLET_USER@$DROPLET_IP:/opt/coinjecture-bootstrap/
     scp -r src/ $DROPLET_USER@$DROPLET_IP:/opt/coinjecture-bootstrap/
     scp requirements.txt $DROPLET_USER@$DROPLET_IP:/opt/coinjecture-bootstrap/
     

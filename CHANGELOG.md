@@ -5,6 +5,29 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2025-10-17
+
+### Fixed
+- **P2P Network Connectivity**: Fixed P2P network to properly connect to genesis block on DigitalOcean
+- **Bootstrap Node**: Bootstrap node now serves genesis block and blockchain data via P2P
+- **Blockchain Sync**: Mining nodes now properly sync blockchain from bootstrap peers
+- **Genesis Block Loading**: Nodes correctly fetch and validate genesis block from network
+
+### Added
+- **Full P2P Implementation**: Complete P2P network with bootstrap and mining nodes
+- **Blockchain Serving**: Bootstrap node serves blockchain data to peers
+- **Network Synchronization**: Proper blockchain sync mechanism across P2P network
+- **PROJECT_STRUCTURE.md**: Added comprehensive project structure documentation
+
+### Changed
+- **File Organization**: Reorganized project structure with proper folders (scripts/, config/, docs/guides/)
+- **Deployment Scripts**: Updated paths to reflect new organization
+
+### Tested
+- **P2P Connectivity**: Verified mining nodes connect to bootstrap peer successfully
+- **Genesis Block Sync**: Confirmed genesis block downloaded and stored locally
+- **Network Operations**: Validated full P2P network functionality
+
 ## [3.6.9] - 2025-10-17
 
 ### Fixed

@@ -3,7 +3,7 @@
 > Built on Satoshi's foundation. Evolved with complexity theory. Driven by real-world utility. Every pro
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-3.6.9-blue.svg)](https://github.com/beanapologist/COINjecture)
+[![Version](https://img.shields.io/badge/version-3.7.0-blue.svg)](https://github.com/beanapologist/COINjecture)
 [![Status](https://img.shields.io/badge/status-live-green.svg)](http://167.172.213.70:5000)
 
 ## Overview
@@ -47,6 +47,11 @@ COINjecture is a utility-based blockchain that proves computational work through
 1. Start with [ARCHITECTURE.README.md](ARCHITECTURE.README.md) for system overview
 2. Read [API.README.md](API.README.md) for interface specifications
 3. Dive into module-specific docs in [docs/](docs/) for implementation details
+
+### For Deployment
+1. See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for directory organization
+2. Use `./scripts/deployment/deploy_mining_node.sh start` to deploy mining node
+3. Use `./scripts/deployment/deploy_bootstrap_to_droplet.sh` to deploy bootstrap node
 
 ### For Users
 1. Read [MANIFESTO.md](MANIFESTO.md) to understand what COINjecture is

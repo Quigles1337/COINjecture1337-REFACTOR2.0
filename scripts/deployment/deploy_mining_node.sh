@@ -14,7 +14,8 @@ NC='\033[0m' # No Color
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." &>/dev/null && pwd)"
+cd "$PROJECT_ROOT"
 
 VENV_DIR=".venv"
 DATA_DIR="data"
@@ -178,7 +179,7 @@ start_mining_node() {
     source "$VENV_DIR/bin/activate"
     
     # Start proper P2P mining node
-    nohup python3 start_p2p_miner.py > "$LOG_FILE" 2>&1 &
+    nohup python3 scripts/mining/start_real_p2p_miner.py > "$LOG_FILE" 2>&1 &
     
     # Save PID
     echo $! > "$PID_FILE"

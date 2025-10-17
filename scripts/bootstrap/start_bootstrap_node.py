@@ -12,6 +12,7 @@ import logging
 import signal
 import threading
 import socket
+import requests
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -40,10 +41,18 @@ class BootstrapNode:
         self.running = False
         self.connected_peers = []
         self.server_socket = None
+        self.genesis_block = None
+        self.blockchain_data = None
+        self.network_api_url = "http://167.172.213.70:5000"
         
     def start(self) -> bool:
         """Start the bootstrap node server."""
         try:
+            # Load genesis block from network
+            if not self._load_genesis_block():
+                logger.error("Failed to load genesis block from network")
+                return False
+            
             host, port = self.listen_addr.split(':')
             port = int(port)
             
@@ -56,6 +65,7 @@ class BootstrapNode:
             logger.info(f"🌐 Bootstrap node listening on {self.listen_addr}")
             logger.info("📡 Ready to accept P2P connections")
             logger.info("🔗 Other nodes can connect to this bootstrap peer")
+            logger.info(f"📊 Genesis block loaded: {self.genesis_block['block_hash'][:16]}...")
             
             # Start accepting connections
             self._accept_connections()
@@ -64,6 +74,32 @@ class BootstrapNode:
             
         except Exception as e:
             logger.error(f"Failed to start bootstrap node: {e}")
+            return False
+    
+    def _load_genesis_block(self) -> bool:
+        """Load genesis block from the network API."""
+        try:
+            logger.info("🌐 Loading genesis block from network...")
+            response = requests.get(f"{self.network_api_url}/v1/data/block/latest", timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    self.genesis_block = data['data']
+                    self.blockchain_data = data
+                    logger.info(f"✅ Genesis block loaded: {self.genesis_block['block_hash'][:16]}...")
+                    logger.info(f"📊 Block index: {self.genesis_block['index']}")
+                    logger.info(f"⛏️ Mining capacity: {self.genesis_block['mining_capacity']}")
+                    return True
+                else:
+                    logger.error("Network API returned error status")
+                    return False
+            else:
+                logger.error(f"Failed to fetch genesis block: HTTP {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error loading genesis block: {e}")
             return False
     
     def _accept_connections(self):
@@ -94,17 +130,19 @@ class BootstrapNode:
             
             logger.info(f"🤝 Handling peer connection from {peer_id}")
             
-            # Send bootstrap information
+            # Send bootstrap information with actual genesis block
             bootstrap_info = {
                 "node_type": "bootstrap",
                 "network_id": "coinjecture-mainnet",
-                "genesis_block": "8020144a4bf3fd907a1ce60f401d07d802725855a56438996481f7d98bbb1ef6",
-                "current_height": 0,
-                "peers": self.connected_peers
+                "genesis_block": self.genesis_block['block_hash'],
+                "current_height": self.genesis_block['index'],
+                "peers": self.connected_peers,
+                "genesis_data": self.genesis_block
             }
             
             response = json.dumps(bootstrap_info).encode('utf-8')
             client_socket.send(response)
+            logger.info(f"📤 Sent bootstrap info to {peer_id}")
             
             # Keep connection alive and handle requests
             while self.running:
@@ -113,20 +151,32 @@ class BootstrapNode:
                     if not data:
                         break
                     
-                    # Handle peer requests (simplified)
+                    # Handle peer requests
                     request = data.decode('utf-8')
                     if "ping" in request.lower():
                         client_socket.send(b"pong")
+                        logger.info(f"📡 Responded to ping from {peer_id}")
                     elif "get_headers" in request.lower():
-                        # Send blockchain headers
+                        # Send blockchain headers with actual data
                         headers_info = {
                             "headers": [{
-                                "hash": "8020144a4bf3fd907a1ce60f401d07d802725855a56438996481f7d98bbb1ef6",
-                                "height": 0,
-                                "timestamp": 1609459200.0
+                                "hash": self.genesis_block['block_hash'],
+                                "height": self.genesis_block['index'],
+                                "timestamp": self.genesis_block['timestamp'],
+                                "previous_hash": self.genesis_block['previous_hash'],
+                                "merkle_root": self.genesis_block['merkle_root']
                             }]
                         }
                         client_socket.send(json.dumps(headers_info).encode('utf-8'))
+                        logger.info(f"📤 Sent blockchain headers to {peer_id}")
+                    elif "get_genesis" in request.lower():
+                        # Send full genesis block
+                        client_socket.send(json.dumps(self.genesis_block).encode('utf-8'))
+                        logger.info(f"📤 Sent genesis block to {peer_id}")
+                    elif "get_blockchain" in request.lower():
+                        # Send full blockchain data
+                        client_socket.send(json.dumps(self.blockchain_data).encode('utf-8'))
+                        logger.info(f"📤 Sent blockchain data to {peer_id}")
                     
                 except Exception as e:
                     logger.warning(f"Error handling peer {peer_id}: {e}")
