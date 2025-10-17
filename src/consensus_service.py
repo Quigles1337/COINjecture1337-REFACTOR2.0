@@ -78,8 +78,8 @@ class ConsensusService:
                 problem_registry
             )
             
-            # Initialize ingest store
-            self.ingest_store = IngestStore("data/faucet_ingest.db")
+            # Initialize ingest store (use API server's database)
+            self.ingest_store = IngestStore("/home/coinjecture/COINjecture/data/faucet_ingest.db")
             
             logger.info("✅ Consensus service initialized")
             return True
