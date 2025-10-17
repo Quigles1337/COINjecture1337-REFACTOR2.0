@@ -951,8 +951,20 @@ Examples:
             block_data["public_key"] = public_key
             
             print(f"🔐 Block signed with wallet: {wallet.address}")
-            print(f"📡 Block data ready for P2P propagation")
-            print(f"💰 Mining rewards will be sent to: {wallet.address}")
+            
+            # Submit to network API
+            try:
+                import requests
+                response = requests.post("http://167.172.213.70:5000/v1/ingest/block", 
+                                       json=block_data, timeout=10)
+                if response.status_code in [200, 202]:
+                    print(f"✅ Block submitted to network: {response.status_code}")
+                    print(f"💰 Mining rewards will be sent to: {wallet.address}")
+                else:
+                    print(f"❌ Network submission failed: {response.status_code}")
+                    print(f"Response: {response.text}")
+            except Exception as e:
+                print(f"❌ Network submission error: {e}")
             
             return 0
             

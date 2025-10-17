@@ -5,6 +5,30 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.5] - 2025-10-17
+
+### Fixed
+- **Sequential Block Mining**: Fixed CLI mine command to properly submit blocks to network API
+  - Added API submission to CLI mine command after P2P propagation
+  - Resolves issue where all blocks showed index 1 instead of sequential indices
+  - Cleared stale block events from database that were causing validation failures
+  - Consensus service now processes blocks correctly into blockchain
+
+### Technical Details
+- CLI mine command now calls `/v1/ingest/block` API endpoint
+- Block events properly stored with sequential indices (1, 2, 3, ...)
+- Consensus service processes events into actual blockchain blocks
+- Wallet-based authentication working correctly with Ed25519 signatures
+- IPFS integration functional for real CID generation
+
+### Testing Results
+- **Before Fix**: All blocks showed `block_index: 1` (1068 stale events)
+- **After Fix**: Blockchain grows sequentially: #1 → #2 → #3
+- CLI correctly queries current blockchain state before mining
+- Sequential mining working: mines next block after current tip
+- Consensus service processing events successfully
+- Blockchain state API shows correct current index
+
 ## [3.9.4] - 2025-10-17
 
 ### Fixed
