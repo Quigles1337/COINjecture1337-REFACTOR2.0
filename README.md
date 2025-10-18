@@ -3,7 +3,7 @@
 > Built on Satoshi's foundation. Evolved with complexity theory. Driven by real-world utility. Every pro
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-3.9.0-blue.svg)](https://github.com/beanapologist/COINjecture)
+[![Version](https://img.shields.io/badge/version-3.9.8-blue.svg)](https://github.com/beanapologist/COINjecture)
 [![Status](https://img.shields.io/badge/status-live-green.svg)](http://167.172.213.70:5000)
 
 ## Overview
@@ -238,7 +238,7 @@ assets/                     # Diagrams and assets
 
 ## Status
 
-**Version**: 3.6.7 (Live TestNet)  
+**Version**: 3.9.7 (Live TestNet)  
 **Status**: Production Ready  
 **License**: MIT  
 

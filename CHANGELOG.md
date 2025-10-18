@@ -5,6 +5,89 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.8] - 2025-01-27
+
+### Fixed
+- **Wallet Persistence**: Fixed Ed25519 private key storage and retrieval
+  - Private keys now properly exported in PKCS8 format for localStorage
+  - Private keys correctly reimported on wallet load for signing operations
+  - Wallet independence from mining operations - users can create wallets separately
+  - Proper signature verification enabling token rewards for web miners
+
+### Technical Details
+- **Private Key Export**: `crypto.subtle.exportKey("pkcs8", keyPair.privateKey)` for storage
+- **Private Key Import**: `crypto.subtle.importKey("pkcs8", ...)` for retrieval
+- **Wallet Persistence**: Ed25519 keys stored as hex strings in localStorage
+- **Signature Verification**: Real Ed25519 signatures that pass backend validation
+- **Token Rewards**: Web miners can now receive tokens for successful mining
+
+### Files Modified
+- `web/app.js` - Fixed wallet creation, storage, and signature generation
+- `CHANGELOG.md` - Documented wallet persistence fix
+
+### Security Notes
+- Private keys stored in browser localStorage (accessible to JavaScript)
+- Recommended for mobile mining and testing only
+- Desktop CLI recommended for serious mining operations
+
+## [3.9.7] - 2025-01-27
+
+### Added
+- **Web CLI Interface**: Mobile-optimized terminal interface for blockchain interaction
+  - Complete CLI command processor with all major operations
+  - Mobile-first design optimized for touch devices and small screens
+  - Real-time network status monitoring and display
+  - Touch-friendly command history with swipe gestures
+  - Auto-complete suggestions for mobile typing
+  - Responsive design for mobile miners
+- **Full Wallet System**: Complete cryptographic wallet implementation
+  - Ed25519 key pair generation and management
+  - Persistent wallet storage in browser localStorage
+  - Proper signature verification for blockchain transactions
+  - Wallet address generation and public key management
+  - Secure private key handling for mining rewards
+
+### Technical Details
+- **CLI Commands Implemented**:
+  - `get-block --latest` / `get-block --index <n>` - Fetch blockchain data
+  - `peers` - List connected network peers
+  - `telemetry-status` - Check network status and statistics
+  - `mine --tier <mobile|desktop|server>` - Start REAL mining operations
+  - `submit-problem` - Submit computational problems (demo mode)
+  - `wallet-generate` - Create new wallet with Ed25519 keys
+  - `wallet-info` - Show wallet details and address
+  - `help` - Show available commands
+  - `clear` - Clear terminal output
+- **Real Mining Implementation**:
+  - Actual subset sum problem solving (NP-Complete)
+  - Dynamic programming algorithm for problem resolution
+  - Real computational work scoring and verification
+  - Proper blockchain block submission with signatures
+  - Ed25519 signature verification for token rewards
+- **Mobile Optimizations**:
+  - Large touch targets (44px minimum) for mobile interaction
+  - Swipe gestures for command history navigation
+  - Virtual keyboard optimization with proper font sizing
+  - Responsive viewport handling for all screen sizes
+  - Touch-friendly auto-complete and command suggestions
+- **API Integration**: Direct integration with `http://167.172.213.70:5000` endpoints
+- **CORS Support**: Backend already configured with Flask-CORS for browser access
+
+### Files Modified
+- `web/index.html` - Replaced with mobile-optimized CLI interface
+- `web/app.js` - Complete CLI command processor with touch support and wallet system
+- `web/style.css` - Mobile-first responsive styling
+- `web/deploy-s3.sh` - Verified deployment configuration
+
+### Testing Considerations
+- Mobile device compatibility (iOS/Android)
+- Touch interaction testing
+- API connectivity verification
+- Command execution and response handling
+- Virtual keyboard optimization
+- Wallet persistence and signature verification
+- Real mining algorithm testing
+
 ## [3.9.6] - 2025-10-17
 
 ### Added

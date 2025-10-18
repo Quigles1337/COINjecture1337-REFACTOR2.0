@@ -2,57 +2,190 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>COINjecture Frontend</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>COINjecture</title>
   <link rel="stylesheet" href="./style.css">
   <link rel="icon" href="data:,">
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
-  <header class="header">
-    <h1>COINjecture</h1>
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="docs" aria-selected="true">API Docs</button>
-      <button class="tab" data-tab="console" aria-selected="false">Live Console</button>
-    </nav>
-  </header>
-
-  <main>
-    <section id="tab-docs" class="tab-panel active" role="tabpanel" aria-labelledby="docs">
-      <article id="docs-content" class="markdown-body">
-        <p>Loading documentation…</p>
-      </article>
-    </section>
-
-    <section id="tab-console" class="tab-panel" role="tabpanel" aria-labelledby="console">
-      <div class="controls">
-        <label for="endpoint">Endpoint</label>
-        <input id="endpoint" type="url" value="http://167.172.213.70:5000/v1/data/block/latest" spellcheck="false">
-        <button id="fetchBtn">Fetch</button>
-        <label class="auto-refresh">
-          <input id="autoRefresh" type="checkbox"> Auto-refresh
-        </label>
-        <select id="refreshInterval">
-          <option value="5">5s</option>
-          <option value="10" selected>10s</option>
-          <option value="30">30s</option>
-          <option value="60">60s</option>
-        </select>
-        <span id="status" class="status">Idle</span>
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-brand">
+        <span class="brand-text">COINjecture</span>
+        <span class="brand-subtitle">Utility-Based Computational Work Blockchain</span>
       </div>
-
-      <div class="response">
-        <pre id="responsePre" class="code"></pre>
+      <div class="nav-links">
+        <a href="#terminal" class="nav-link active" data-page="terminal">Terminal</a>
+        <a href="#api" class="nav-link" data-page="api">API Docs</a>
+        <a href="#download" class="nav-link" data-page="download">Download CLI</a>
       </div>
-    </section>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Terminal Page -->
+    <div id="page-terminal" class="page active">
+      <div class="terminal-container">
+        <div class="terminal-header">
+          <div class="terminal-title">🚀 COINjecture Web CLI</div>
+          <div class="status" id="network-status">🌐 Connecting...</div>
+        </div>
+    
+    <div class="terminal-output" id="terminal-output">
+      <div class="output-line">
+        <span class="prompt">coinjectured$</span>
+        <span class="command">help</span>
+      </div>
+      <div class="output-line">
+        <span class="output">Available commands:</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  get-block --latest     Get latest block</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  get-block --index &lt;n&gt;  Get block by index</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  peers                  List connected peers</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  telemetry-status       Check network status</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  mine --tier &lt;tier&gt;     Start mining (mobile|desktop|server)</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  submit-problem         Submit computational problem</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  wallet-generate        Create new wallet</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  wallet-info            Show wallet details</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  help                   Show this help</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  clear                  Clear terminal</span>
+      </div>
+      <div class="output-line">
+        <span class="output"></span>
+      </div>
+    </div>
+    
+        <div class="input-container">
+          <div class="input-line">
+            <span class="prompt">coinjectured$</span>
+            <input type="text" id="command-input" autocomplete="off" spellcheck="false" placeholder="Enter command...">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Docs Page -->
+    <div id="page-api" class="page">
+      <div class="page-content">
+        <h1>API Documentation</h1>
+        <div class="api-section">
+          <h2>Live API Endpoints</h2>
+          <div class="endpoint-list">
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="url">/v1/data/block/latest</span>
+              <span class="description">Get latest blockchain block</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="url">/v1/data/block/{index}</span>
+              <span class="description">Get block by index</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="url">/v1/peers</span>
+              <span class="description">List connected peers</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="url">/v1/display/telemetry/latest</span>
+              <span class="description">Get network telemetry</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">POST</span>
+              <span class="url">/v1/mine</span>
+              <span class="description">Start mining operation</span>
+            </div>
+          </div>
+        </div>
+        <div class="api-section">
+          <h2>Base URL</h2>
+          <code>http://167.172.213.70:5000</code>
+        </div>
+        <div class="api-section">
+          <h2>Test API</h2>
+          <button id="test-api" class="btn-primary">Test Connection</button>
+          <div id="api-test-result" class="test-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Download Page -->
+    <div id="page-download" class="page">
+      <div class="page-content">
+        <h1>Download COINjecture CLI</h1>
+        <div class="download-section">
+          <h2>macOS (Recommended)</h2>
+          <div class="download-card">
+            <h3>COINjecture-macOS-v3.9.7-Final.zip</h3>
+            <p>Complete CLI package with zero security warnings</p>
+            <ul>
+              <li>✅ Zero Security Warnings</li>
+              <li>✅ No Python Required</li>
+              <li>✅ Interactive Menu</li>
+              <li>✅ Direct CLI Access</li>
+              <li>✅ Network Integration</li>
+            </ul>
+            <button class="btn-download" onclick="downloadCLI('macos')">Download (39.2 MB)</button>
+          </div>
+        </div>
+        
+        <div class="download-section">
+          <h2>Installation Instructions</h2>
+          <div class="install-steps">
+            <div class="step">
+              <span class="step-number">1</span>
+              <span class="step-text">Download the zip file above</span>
+            </div>
+            <div class="step">
+              <span class="step-number">2</span>
+              <span class="step-text">Extract and run <code>./install.sh</code></span>
+            </div>
+            <div class="step">
+              <span class="step-number">3</span>
+              <span class="step-text">COINjecture launches automatically! 🚀</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="download-section">
+          <h2>Other Platforms</h2>
+          <div class="platform-status">
+            <div class="platform">
+              <span class="platform-name">Windows</span>
+              <span class="status-badge coming-soon">Coming Soon</span>
+            </div>
+            <div class="platform">
+              <span class="platform-name">Linux</span>
+              <span class="status-badge coming-soon">Coming Soon</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
-
-  <footer class="footer">
-    <span>Frontend is static and reads live data from the API endpoint.</span>
-  </footer>
-
+  
   <script src="./app.js"></script>
 </body>
 </html>
-
-
