@@ -5,6 +5,41 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.29] - 2025-10-19
+
+### 🌐 Full Blockchain Sync & Network Analysis
+- **Complete Blockchain Sync**: Local node synced from 166 blocks to 3,020 blocks (100% sync)
+- **Network Analysis**: Identified 4 unique miners who have participated in the network
+- **Mining Capacity Analysis**: Discovered tier system with TIER_1_MOBILE, DESKTOP, and MOBILE capacities
+- **API Integration**: Successfully downloaded complete blockchain history from API server
+- **Bootstrap Connection**: Established proper P2P connection to bootstrap node (167.172.213.70:12345)
+
+### 📊 Network Statistics
+- **Total Blocks**: 3,020 blocks (was 166 blocks locally)
+- **Unique Miners**: 4 miners have participated in the network
+  - mining-service: 2,839 blocks (94.0%)
+  - web-87968da74d1c3360: 10 blocks (0.3%)
+  - test-miner: 1 block (0.03%)
+  - force-processor: 1 block (0.03%)
+- **Mining Capacity Distribution**:
+  - DESKTOP: 2,839 blocks (94.0%)
+  - TIER_1_MOBILE: 169 blocks (5.6%)
+  - MOBILE: 12 blocks (0.4%)
+
+### 🔧 Technical Implementation
+- **Full Sync Script**: Created comprehensive blockchain sync script
+- **API Data Retrieval**: Downloaded complete blockchain history from /v1/data/blocks/all endpoint
+- **Local State Update**: Updated local blockchain_state.json with complete network data
+- **Cache Synchronization**: Updated cache files with latest network state
+- **P2P Discovery**: Established proper bootstrap node connection for peer discovery
+
+### 🎯 Network Understanding
+- **Tier System**: Clarified difference between TIER_1_MOBILE and MOBILE capacities
+  - TIER_1_MOBILE: Hardware compatibility tier for mobile devices (8-12 elements)
+  - MOBILE: Different capacity classification in the system
+- **Mining Distribution**: Main mining service handles 94% of network blocks
+- **Network Health**: Network is actively mining with continuous block production
+
 ## [3.9.28] - 2025-10-19
 
 ### 🔗 Blockchain/Consensus Integration Fix

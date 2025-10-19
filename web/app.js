@@ -288,6 +288,9 @@ class WebInterface {
       case 'blockchain-stats':
         this.displayBlockchainStats();
         break;
+      case 'blockchain-stats':
+        this.displayBlockchainStats();
+        break;
       case 'help':
         this.showHelp();
         break;

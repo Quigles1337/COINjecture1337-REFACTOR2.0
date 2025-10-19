@@ -34,6 +34,16 @@
       <div class="terminal-container">
         <div class="terminal-header">
           <div class="terminal-title">🚀 COINjecture Web CLI ($BEANS)</div>
+          <div class="wallet-dashboard" id="wallet-dashboard" style="display: none;">
+            <div class="wallet-info">
+              <span class="wallet-address" id="wallet-address">Loading...</span>
+              <button class="copy-btn" id="copy-address-btn" title="Copy Address">📋</button>
+            </div>
+            <div class="rewards-info">
+              <span class="rewards-total" id="rewards-total">0 BEANS</span>
+              <span class="blocks-mined" id="blocks-mined">0 blocks</span>
+            </div>
+          </div>
           <div class="status" id="network-status">🌐 Connecting...</div>
         </div>
     
@@ -47,9 +57,21 @@
       </div>
       <div class="output-line">
         <span class="output">  get-block --latest     Get latest block</span>
+      <div class="output-line">
+        <span class="output">  blockchain-stats      Show blockchain statistics (Total: 333 blocks)</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  blockchain-stats      Show blockchain statistics (Total: 167 blocks)</span>
+      </div>
       </div>
       <div class="output-line">
         <span class="output">  get-block --index &lt;n&gt;  Get block by index</span>
+      <div class="output-line">
+        <span class="output">  blockchain-stats      Show blockchain statistics (Total: 333 blocks)</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  blockchain-stats      Show blockchain statistics (Total: 167 blocks)</span>
+      </div>
       </div>
       <div class="output-line">
         <span class="output">  peers                  List connected peers</span>
@@ -68,6 +90,15 @@
       </div>
       <div class="output-line">
         <span class="output">  wallet-info            Show wallet details</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  rewards                Show mining rewards breakdown</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  export-wallet          Export wallet details for backup</span>
+      </div>
+      <div class="output-line">
+        <span class="output">  copy-address           Copy wallet address to clipboard</span>
       </div>
       <div class="output-line">
         <span class="output">  help                   Show this help</span>

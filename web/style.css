@@ -123,6 +123,95 @@ body {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid #333;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Wallet Dashboard */
+.wallet-dashboard {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: #2a2a2a;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  font-size: 14px;
+}
+
+.wallet-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wallet-address {
+  font-family: 'Courier New', monospace;
+  color: #9d7ce8;
+  font-size: 12px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-btn {
+  background: #444;
+  border: 1px solid #666;
+  color: #e6e6e6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+  background: #555;
+  border-color: #9d7ce8;
+}
+
+.copy-btn:active {
+  background: #9d7ce8;
+  color: #000;
+}
+
+.rewards-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rewards-total {
+  color: #4ade80;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.blocks-mined {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* Mobile responsive wallet dashboard */
+@media (max-width: 768px) {
+  .terminal-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .wallet-dashboard {
+    order: 2;
+    justify-content: space-between;
+  }
+  
+  .wallet-address {
+    max-width: 100px;
+  }
+  
+  .rewards-info {
+    text-align: right;
+  }
 }
 
 .terminal-title {

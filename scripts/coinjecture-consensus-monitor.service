@@ -1,0 +1,18 @@
+[Unit]
+Description=COINjecture Consensus Health Monitor
+After=network.target
+Wants=coinjecture-consensus.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/coinjecture-consensus
+ExecStart=/opt/coinjecture-consensus/.venv/bin/python3 /opt/coinjecture-consensus/consensus_health_monitor.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
