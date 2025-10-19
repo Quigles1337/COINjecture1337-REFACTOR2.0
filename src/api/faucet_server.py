@@ -55,7 +55,11 @@ class FaucetAPI:
         self.auth = HMACAuth(secret=os.environ.get("FAUCET_HMAC_SECRET", "dev-secret"))
         
         # Enable CORS for browser access
-        CORS(self.app)
+        CORS(self.app, 
+            origins=["https://coinjecture.com", "https://api.coinjecture.com"],
+            methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Content-Type", "Authorization", "X-User-ID", "X-Timestamp", "X-Signature"],
+            supports_credentials=True)
         
         # Rate limiting: 100 requests/minute per IP
         self.limiter = Limiter(

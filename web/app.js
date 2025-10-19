@@ -18,8 +18,8 @@ async function waitForNobleEd25519() {
 
 class WebInterface {
   constructor() {
-    // Use relative URLs when served from the API server
-    this.apiBase = window.location.hostname === '167.172.213.70' ? '' : 'https://167.172.213.70';
+    // Use production API endpoint
+    this.apiBase = 'https://api.coinjecture.com';
     this.output = document.getElementById('terminal-output');
     this.input = document.getElementById('command-input');
     this.status = document.getElementById('network-status');
@@ -286,10 +286,7 @@ class WebInterface {
     
     switch(cmd) {
       case 'blockchain-stats':
-        this.displayBlockchainStats();
-        break;
-      case 'blockchain-stats':
-        this.displayBlockchainStats();
+        await this.displayBlockchainStats();
         break;
       case 'help':
         this.showHelp();
@@ -1069,8 +1066,7 @@ class WebInterface {
         
         // Add certificate acceptance button
         this.addOutput('');
-        this.addOutput('✅ After accepting the certificate, click the button below:');
-        this.addOutput('<button onclick="window.location.reload()" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">🔄 Refresh Page</button>');
+        this.addOutput('✅ After accepting the certificate, refresh the page manually.');
         
         // Set status to show certificate issue
         this.status.innerHTML = '🔒 Certificate Required - Click Link Above';
@@ -1310,23 +1306,27 @@ class WebInterface {
   }
 
   // Display blockchain statistics
-  displayBlockchainStats() {
-    const stats = {
-      totalBlocks: 167,
-      latestBlock: 164,
-      latestHash: 'mined_block_164_...',
-      workScore: 1740.0,
-      lastUpdated: Date.now() / 1000
-    };
-    
-    this.addMultiLineOutput([
-      '📊 Blockchain Statistics:',
-      `   Total Blocks: ${stats.totalBlocks}`,
-      `   Latest Block: #${stats.latestBlock}`,
-      `   Latest Hash: ${stats.latestHash}`,
-      `   Work Score: ${stats.workScore}`,
-      `   Last Updated: ${new Date(stats.lastUpdated * 1000).toLocaleString()}`
-    ]);
+  async displayBlockchainStats() {
+    try {
+      this.addOutput('📊 Fetching blockchain statistics...');
+      const response = await this.fetchWithFallback('/v1/data/block/latest');
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        const block = data.data;
+        this.addMultiLineOutput([
+          '📊 Blockchain Statistics:',
+          `   Latest Block: #${block.index}`,
+          `   Latest Hash: ${block.block_hash.substring(0, 20)}...`,
+          `   Work Score: ${block.cumulative_work_score.toFixed(2)}`,
+          `   Last Updated: ${new Date(block.timestamp * 1000).toLocaleString()}`
+        ]);
+      } else {
+        this.addOutput(`❌ ${data.message || 'Failed to fetch stats'}`, 'error');
+      }
+    } catch (error) {
+      this.addOutput(`❌ Network error: ${error.message}`, 'error');
+    }
   }
 }
 

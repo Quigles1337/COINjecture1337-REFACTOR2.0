@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-3.9.18-blue.svg)](https://github.com/beanapologist/COINjecture)
-[![Status](https://img.shields.io/badge/status-live-green.svg)](http://167.172.213.70:5000)
+[![Status](https://img.shields.io/badge/status-live-green.svg)](https://api.coinjecture.com)
 [![v4.0 Coming Soon](https://img.shields.io/badge/v4.0-Time%20Crystal%20Revolution-purple.svg)](V4_ROADMAP.md)
 
 ## 🌟 v4.0 Coming Soon: The Time Crystal Revolution
@@ -153,10 +153,10 @@ coinjectured list-submissions
 - `telemetry` - Manage telemetry settings
 
 ## Live TestNet
-- **🌍 API Server**: http://167.172.213.70:5000
-- **📊 Latest Block**: http://167.172.213.70:5000/v1/data/block/latest
-- **🔍 Health Check**: http://167.172.213.70:5000/health
-- **📡 All Endpoints**: Available worldwide
+- **🌍 API Server**: https://api.coinjecture.com
+- **📊 Latest Block**: https://api.coinjecture.com/v1/data/block/latest
+- **🔍 Health Check**: https://api.coinjecture.com/health
+- **📡 All Endpoints**: Available worldwide with TLS/SSL
 
 ## Documentation
 
@@ -284,4 +284,4 @@ Built on Satoshi Nakamoto's foundational insights about proof-of-work consensus 
 
 **COINjecture: Utility-based computational work, built on Satoshi's foundation.**
 
-*Visit our live server: http://167.172.213.70:5000*
+*Visit our live server: https://api.coinjecture.com*

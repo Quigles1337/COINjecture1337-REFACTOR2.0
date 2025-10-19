@@ -11,7 +11,7 @@ Each user gets a unique API key for secure authentication.
 
 **Registration:**
 ```bash
-curl -X POST http://167.172.213.70:5000/v1/user/register \
+curl -X POST https://api.coinjecture.com/v1/user/register \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "your_miner_id",
@@ -41,7 +41,7 @@ For development and testing, uses a shared secret.
 
 **Registration:**
 ```bash
-curl -X POST http://167.172.213.70:5000/v1/user/register \
+curl -X POST https://api.coinjecture.com/v1/user/register \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "dev_miner",
@@ -113,7 +113,7 @@ Submit your mined block with proper authentication:
 import requests
 
 response = requests.post(
-    'http://167.172.213.70:5000/v1/ingest/block',
+    'https://api.coinjecture.com/v1/ingest/block',
     json=payload,
     headers=headers,
     timeout=10
@@ -132,12 +132,12 @@ else:
 
 ### Check Your Profile
 ```bash
-curl http://167.172.213.70:5000/v1/user/profile/your_miner_id
+curl https://api.coinjecture.com/v1/user/profile/your_miner_id
 ```
 
 ### Update Your Tier
 ```bash
-curl -X POST http://167.172.213.70:5000/v1/user/update-tier \
+curl -X POST https://api.coinjecture.com/v1/user/update-tier \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "your_miner_id",
@@ -147,7 +147,7 @@ curl -X POST http://167.172.213.70:5000/v1/user/update-tier \
 
 ### Test Authentication
 ```bash
-curl -X POST http://167.172.213.70:5000/v1/user/auth-test \
+curl -X POST https://api.coinjecture.com/v1/user/auth-test \
   -H "Content-Type: application/json" \
   -H "X-User-ID: your_miner_id" \
   -H "X-Signature: your_signature" \

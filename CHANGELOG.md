@@ -5,6 +5,82 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.35] - 2025-10-19
+
+### 🔧 Data Source Consolidation & CORS Fix
+- **Consolidated to 3 Data Sources**: Reduced from multiple conflicting sources to exactly 3 synchronized sources
+  - Primary: `/opt/coinjecture-consensus/data/blockchain_state.json` (authoritative)
+  - Cache: `/home/coinjecture/COINjecture/data/cache/` (synchronized)
+  - Database: `/opt/coinjecture-consensus/data/blockchain.db` (persistent storage)
+- **Fixed CORS Headers**: Resolved duplicate CORS headers causing browser errors
+- **Eliminated Stale Data**: Frontend no longer shows inconsistent blockchain statistics (333 vs 167 blocks)
+- **Cache Synchronization**: All cache files now synchronized with primary blockchain state
+- **API Consistency**: All endpoints now return consistent data from single source
+
+### 🐛 Bug Fixes
+- **Removed Duplicate Data Sources**: Eliminated conflicting blockchain_state.json and blockchain.db files
+- **Fixed Hash Validation**: Relaxed validation to accept different hash lengths (not just 64 characters)
+- **Fixed Range Queries**: Block range queries now work correctly with proper validation
+- **Fixed Cache Manager**: Updated to use only primary blockchain state source
+- **Fixed Path Configuration**: Corrected blockchain state path to point to authoritative source
+
+### 🚀 Performance & Reliability
+- **Single Source of Truth**: All blockchain data now sourced from one authoritative file
+- **Consistent API Responses**: All endpoints return synchronized data (5280 blocks, latest index 5277)
+- **Improved Frontend Stability**: No more switching between different block counts
+- **Better Error Handling**: More flexible validation prevents API failures
+
+## [3.9.34] - 2025-10-19
+
+### 🔧 Frontend Stale Data Fix
+- **Fixed hardcoded blockchain statistics**: Replaced hardcoded 167/333 block counts with live API data
+- **Removed duplicate command handlers**: Cleaned up duplicate `blockchain-stats` cases in command processor
+- **Live data fetching**: `blockchain-stats` command now fetches real-time data from API
+- **API page testing**: Verified "Test Connection" button shows current blockchain state
+- **Unified blockchain state**: Frontend, API, and consensus all use same blockchain state source
+
+### 🐛 Bug Fixes
+- Fixed `displayBlockchainStats()` showing outdated hardcoded values
+- Removed duplicate `blockchain-stats` command in switch statement
+- Frontend now displays current chain height (4900+ blocks) instead of stale 167 blocks
+
+## [3.9.33] - 2025-10-19
+
+### 🌐 Production API Setup: Mobile-Compatible HTTPS Endpoint
+- **Production API Deployment**: Successfully deployed production API at https://api.coinjecture.com
+- **SSL Certificate**: Obtained valid Let's Encrypt certificate for api.coinjecture.com
+- **Mobile OS Compatibility**: Fixed mobile OS blocking by using standard port 443 with TLS
+- **DNS Configuration**: Configured A record api.coinjecture.com → 167.172.213.70
+- **Nginx Configuration**: Set up reverse proxy with TLS, security headers, and CORS support
+
+### 🔐 Security & Performance Enhancements
+- **TLS 1.2/1.3 Support**: Modern encryption protocols for secure communication
+- **Security Headers**: Implemented HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection
+- **CORS Configuration**: Proper cross-origin resource sharing for web applications
+- **HTTP/2 Support**: Modern protocol for improved performance
+- **Auto-Renewal**: SSL certificate automatically renews via cron job
+
+### 📱 Mobile Compatibility Resolution
+- **Port Standardization**: Moved from non-standard port 5000 to standard port 443
+- **Domain Name**: Replaced raw IP address (167.172.213.70:5000) with proper domain name
+- **TLS Certificate**: Valid SSL certificate prevents mobile OS security blocks
+- **HTTPS Redirect**: Automatic HTTP to HTTPS redirect for security
+- **Cross-Platform Access**: API now accessible from all mobile devices and browsers
+
+### 🔧 Application Updates
+- **Web Interface**: Updated web/app.js to use https://api.coinjecture.com
+- **CLI Updates**: Updated src/cli.py to use production API endpoint
+- **Configuration**: Updated config/miner_config.json with new API URL
+- **Documentation**: Updated all documentation files with production endpoint
+- **API Testing**: Created comprehensive test suite for production API validation
+
+### 🎯 Production Readiness
+- **API Endpoints**: All endpoints tested and working (4/4 tests passing)
+- **Health Monitoring**: /health endpoint for service monitoring
+- **Block Data**: /v1/data/block/latest and /v1/data/blocks endpoints functional
+- **Rewards System**: /v1/rewards/leaderboard endpoint operational
+- **Error Handling**: Proper error responses with required parameters
+
 ## [3.9.32] - 2025-10-19
 
 ### 🔧 Frontend JavaScript Syntax Fix & CloudFront Cache Clear

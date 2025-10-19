@@ -516,8 +516,8 @@ Examples:
         enable_parser.add_argument(
             '--faucet-url',
             type=str,
-            default='http://167.172.213.70:5000',
-            help='Faucet API URL (default: http://167.172.213.70:5000)'
+            default='https://api.coinjecture.com',
+            help='Faucet API URL (default: https://api.coinjecture.com)'
         )
         enable_parser.add_argument(
             '--secret',
@@ -591,8 +591,8 @@ Examples:
         parser.add_argument(
             '--api-url',
             type=str,
-            default='http://167.172.213.70:5000',
-            help='API URL for balance query (default: http://167.172.213.70:5000)'
+            default='https://api.coinjecture.com',
+            help='API URL for balance query (default: https://api.coinjecture.com)'
         )
         parser.set_defaults(func=self._handle_wallet_balance)
     
@@ -953,7 +953,7 @@ Examples:
             # Submit to network API
             try:
                 import requests
-                response = requests.post("http://167.172.213.70:5000/v1/ingest/block", 
+                response = requests.post("https://api.coinjecture.com/v1/ingest/block", 
                                        json=block_data, timeout=10)
                 if response.status_code in [200, 202]:
                     print(f"✅ Block submitted to network: {response.status_code}")
@@ -973,7 +973,7 @@ Examples:
     def _get_current_blockchain_index(self) -> int:
         """Get the current blockchain index from the network."""
         try:
-            response = requests.get("http://167.172.213.70:5000/v1/data/block/latest", timeout=5)
+            response = requests.get("https://api.coinjecture.com/v1/data/block/latest", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('status') == 'success':
@@ -986,7 +986,7 @@ Examples:
     def _get_latest_block_hash(self) -> str:
         """Get the latest block hash from the network."""
         try:
-            response = requests.get("http://167.172.213.70:5000/v1/data/block/latest", timeout=5)
+            response = requests.get("https://api.coinjecture.com/v1/data/block/latest", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('status') == 'success':
@@ -1866,7 +1866,7 @@ Examples:
     
     def _enable_telemetry_interactive(self):
         """Interactive telemetry enable."""
-        faucet_url = input("Faucet API URL (default: http://167.172.213.70:5000): ").strip() or "http://167.172.213.70:5000"
+        faucet_url = input("Faucet API URL (default: https://api.coinjecture.com): ").strip() or "https://api.coinjecture.com"
         secret = input("HMAC secret (default: dev-secret): ").strip() or "dev-secret"
         
         args = type('Args', (), {
@@ -2293,7 +2293,7 @@ Examples:
                 return 1
             
             # Query rewards API
-            response = requests.get(f"http://167.172.213.70:5000/v1/rewards/{miner_address}", timeout=10)
+            response = requests.get(f"https://api.coinjecture.com/v1/rewards/{miner_address}", timeout=10)
             
             if response.status_code == 200:
                 data = response.json()['data']
@@ -2326,7 +2326,7 @@ Examples:
             import requests
             
             # Query leaderboard API
-            response = requests.get("http://167.172.213.70:5000/v1/rewards/leaderboard", timeout=10)
+            response = requests.get("https://api.coinjecture.com/v1/rewards/leaderboard", timeout=10)
             
             if response.status_code == 200:
                 data = response.json()['data']
