@@ -5,7 +5,14 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.9.31] - 2025-10-19
+## [3.9.32] - 2025-10-19
+
+### 🔧 Frontend JavaScript Syntax Fix & CloudFront Cache Clear
+- **JavaScript Syntax Error Fix**: Fixed ReferenceError in web interface dashboard update
+- **Template Literal Fix**: Corrected template literal syntax for wallet address display
+- **CloudFront Cache Clear**: Cleared CDN cache to force fresh content delivery globally
+- **Dashboard Update Fix**: Resolved "BEANSa93eefd297ae59e963d0977319690ffbc55e2b33 is not defined" error
+- **Cache-Busting Implementation**: Added comprehensive cache-busting for browser and CDN
 
 ### 🚀 S3 Deployment & Configuration Fix
 - **S3 Deployment Success**: Successfully deployed wallet display and mining rewards fixes to S3
