@@ -5,7 +5,14 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.9.30] - 2025-10-19
+## [3.9.31] - 2025-10-19
+
+### 🚀 S3 Deployment & Configuration Fix
+- **S3 Deployment Success**: Successfully deployed wallet display and mining rewards fixes to S3
+- **CORS Configuration Fix**: Fixed CORS JSON format for S3 compatibility
+- **ACL Permissions**: Removed ACL parameter from S3 sync (bucket doesn't allow ACLs)
+- **Deployment Script Update**: Updated deploy-s3.sh to work with current S3 bucket configuration
+- **Web Interface Live**: Updated app.js with wallet fixes now live on S3
 
 ### 🔧 Wallet Display & Mining Rewards Fix
 - **Wallet Address Consistency**: Fixed wallet-balance command to show correct address from config/miner_wallet.json
