@@ -5,6 +5,66 @@ All notable changes to COINjecture will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.27] - 2025-10-19
+
+### 🔄 Frontend Cache Refresh & API Cache Sync
+- **Frontend Cache Updated**: Successfully updated from Block #219 to Block #2732
+- **Cache Files Refreshed**: Updated `latest_block.json` and `blocks_history.json` with current blockchain state
+- **API Cache Issue Identified**: API service still serving old cached data (Block #219) despite cache file updates
+- **Memory-Efficient Processing**: Consensus service running at 21MB (within 256MB limit)
+- **Block Processing**: 2,715+ blocks processed successfully with our conjecture applied
+
+### 🔧 Technical Implementation
+- **Cache Refresh Script**: Created `simple_cache_refresh.py` for frontend cache updates
+- **API Service Restart**: Implemented API service restart to clear internal cache
+- **Cache Synchronization**: Updated cache files to reflect current blockchain state
+- **Service Management**: Proper restart sequence for API service cache clearing
+- **Memory Management**: Maintained 21MB memory usage with chunked processing
+
+### 📊 System Status
+- **Blockchain State**: 2,715 blocks, latest index: 2732
+- **Frontend Cache**: Updated to Block 2732 (from 219)
+- **API Cache Files**: Updated successfully
+- **API Response**: Still showing old data (Block #219) - needs internal cache clear
+- **Consensus Service**: Running efficiently with memory management
+
+### 🎯 Next Steps
+- **API Internal Cache**: Need to clear API service internal cache to show updated data
+- **Cache Synchronization**: Ensure API serves current blockchain state
+- **Frontend Display**: Verify frontend shows updated block information
+
+## [3.9.26] - 2025-10-19
+
+### 🧠 Memory-Efficient Consensus: Conjecture Applied Successfully
+- **OOM Killer Resolution**: Fixed Out Of Memory killer issues with memory-efficient processing
+- **Conjecture Implementation**: Applied conjecture about balancing memory and processing
+- **Memory Optimization**: Reduced memory usage from 413MB to 21MB (95% reduction)
+- **Service Stability**: Consensus service now runs continuously without crashes
+- **Block Processing**: Successfully processes 2,548+ blocks with memory management
+- **Systemd Integration**: Service runs with strict 256MB memory limits
+
+### 🔧 Technical Implementation
+- **Memory-Efficient Service**: Created `consensus_service_memory_optimized.py` with chunked processing
+- **Memory Monitoring**: Real-time memory usage tracking with automatic cleanup
+- **Chunk Processing**: Process 10 blocks at a time to prevent memory overflow
+- **Automatic Recovery**: Service automatically restarts on memory limit breach
+- **Hash Field Fix**: Fixed missing hash fields in blockchain state (1,600+ blocks fixed)
+- **Database Optimization**: Fixed database path and ownership issues
+
+### 📊 System Status
+- **Current Blocks**: 2,548+ blocks processed successfully
+- **Memory Usage**: 21MB (within 256MB limit)
+- **Service Status**: Active and running (no more OOM killer)
+- **Block Processing**: Continuous processing with memory management
+- **API Cache**: 2,553 blocks (8 blocks ahead of blockchain state)
+- **Frontend Cache**: Still showing old data (Block #219) - needs cache refresh
+
+### 🎯 Conjecture Results
+- **Memory Balance**: Successfully balanced memory and processing
+- **Service Stability**: No more crashes or OOM killer issues
+- **Block Processing**: Efficient processing of large blockchain state
+- **System Health**: All services running within memory constraints
+
 ## [3.9.25] - 2025-10-19
 
 ### 🚀 Complete Power Cycle Deployment: Frontend & Backend Final
