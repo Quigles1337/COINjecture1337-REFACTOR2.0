@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.9.70] - 2025-10-21
+
+### Fixed
+- **Mobile Consensus Sync**: Successfully deployed mobile mining consensus sync fix to production server
+- **API Server**: Fixed Flask dependencies and virtual environment activation for API server
+- **Mobile Mining**: Mobile version now properly syncs proof submissions to consensus engine
+- **Rate Limiting**: API now returns 429 (rate limiting) instead of 401/502 errors, confirming proper processing
+
+### Technical Details
+- Deployed updated faucet_server.py with duplicate endpoint fix to production server
+- Fixed API server startup with proper virtual environment activation
+- Mobile mining submissions now hit correct endpoint for BlockEvent processing
+- Consensus service can properly process mobile mining submissions
+
+### Resolved Issues
+- ✅ Mobile mining blocks now sync to consensus engine
+- ✅ API server running properly with Flask dependencies
+- ✅ Mobile mining returns 429 (rate limiting) instead of 401/502 errors
+- ✅ Proof submissions properly processed by consensus service
+
 ## [3.9.69] - 2025-10-21
 
 ### Fixed
