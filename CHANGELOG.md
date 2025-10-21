@@ -1,5 +1,29 @@
 # Changelog
 
+## [3.9.63] - 2025-10-21
+
+### Fixed
+- **RESOLVED**: Persistent CloudFront caching issues by deploying new CloudFront distribution
+- **FIXED**: Browser cache issues preventing users from seeing latest frontend version
+- **DEPLOYED**: New CloudFront distribution (E3D13VYDP7ZOQU) with fresh cache
+
+### Added
+- New CloudFront distribution to completely bypass persistent caching issues
+- Updated deployment scripts to use new CloudFront distribution ID
+- Fresh cache environment with no stale content
+
+### Technical Details
+- **New CloudFront Distribution**: E3D13VYDP7ZOQU (d3srwqcuj8kw0l.cloudfront.net)
+- **Old Distribution**: E2INLKPSADEUYX (kept for reference)
+- **Deployment Scripts**: Updated to use new distribution ID
+- **Cache Strategy**: Fresh distribution with no cached content
+- **DNS Update**: Users can access via new CloudFront domain immediately
+
+### Migration Notes
+- Old distribution (E2INLKPSADEUYX) will be disabled after confirming new one works
+- All future deployments use new CloudFront distribution
+- No more persistent caching issues with frontend updates
+
 ## [3.9.62] - 2025-10-21
 
 ### Fixed

@@ -3,7 +3,7 @@ set -euo pipefail
 
 BUCKET_NAME="coinjecture.com"
 REGION="us-east-1"
-CLOUDFRONT_DISTRIBUTION_ID="E2INLKPSADEUYX"
+CLOUDFRONT_DISTRIBUTION_ID="E3D13VYDP7ZOQU"
 
 echo "Creating bucket (if not exists)"
 aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$REGION" || true
