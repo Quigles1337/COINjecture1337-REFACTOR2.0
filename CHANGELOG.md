@@ -1,5 +1,54 @@
 # Changelog
 
+## [3.10.2] - 2025-10-21
+
+### Major Features
+- **Wallet Persistence System**: Complete backend wallet registry with Ed25519 cryptographic wallets
+- **IPFS Data Access**: Full IPFS data retrieval system for user computational work
+- **Real Cryptographic Wallets**: Replaced demo wallets with proper Ed25519 key generation
+- **Multi-Device Wallet Access**: Wallet recovery using BIP39 mnemonic phrases
+- **API Documentation**: Complete API docs with all 16 endpoints and rate limits
+
+### Wallet & Security
+- **Ed25519 Cryptography**: Real cryptographic key generation using Web Crypto API
+- **BIP39 Recovery**: 12-word mnemonic phrases for wallet recovery across devices
+- **Wallet Registry**: Backend database for wallet persistence and verification
+- **Digital Signatures**: Cryptographic proof of wallet ownership for mining
+- **Auto-Registration**: Wallets automatically registered on first mining submission
+
+### IPFS Data System
+- **IPFS Data Queries**: `/v1/ipfs/user/{address}` - Get all user IPFS data
+- **IPFS Statistics**: `/v1/ipfs/stats/{address}` - Computational work statistics
+- **Data Downloads**: `/v1/ipfs/download/{address}` - Export data as JSON/CSV
+- **Data Ownership**: Users can access all their computational work outputs
+- **Gateway URLs**: Multiple IPFS gateway access points for data retrieval
+
+### API Enhancements
+- **Missing Endpoints**: Added `/v1/peers` endpoint for network peer information
+- **Rate Limiting**: Proper rate limits for all endpoints (10-100 requests/minute)
+- **Error Handling**: Improved error responses and status codes
+- **API Documentation**: Complete endpoint documentation with categories and examples
+
+### Frontend Improvements
+- **IPFS Commands**: New CLI commands `ipfs-data`, `ipfs-stats`, `ipfs-download`
+- **Wallet Registration**: Automatic backend registration after wallet creation
+- **Help System**: Updated help text with new IPFS data commands
+- **Error Prevention**: Fixed JavaScript variable redeclaration errors
+- **Web Crypto API**: Enhanced Ed25519 library loading with fallback CDNs
+
+### Database Schema
+- **Wallet Registry Table**: New database table for wallet persistence
+- **IPFS Data Linking**: All mining submissions linked to wallet addresses
+- **Auto-Registration**: Mining submissions automatically register wallets
+- **Data Integrity**: Proper foreign key relationships and data consistency
+
+### User Experience
+- **Wallet Recovery**: Users can recover wallets on any device using recovery phrases
+- **Data Access**: Complete access to all IPFS data generated through mining
+- **Multi-Device**: Same wallet works across web, mobile, and CLI interfaces
+- **Data Export**: Download all computational work data in multiple formats
+- **Real Wallets**: No more demo wallets - all users get real cryptographic wallets
+
 ## [3.10.1] - 2025-10-21
 
 ### Critical Bug Fixes

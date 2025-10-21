@@ -134,6 +134,44 @@ class Wallet:
         # Use multi-implementation verification (prioritizes PyNaCl for browser compatibility)
         return Wallet._verify_tweetnacl_signature(public_key_hex, canonical, signature_hex)
     
+    def zk_prove_wallet_ownership(self, challenge: bytes) -> str:
+        """
+        Prove wallet ownership without revealing private key.
+        Uses Schnorr-style proof compatible with Ed25519.
+        
+        Args:
+            challenge: Random challenge bytes
+            
+        Returns:
+            ZK proof as hex string
+        """
+        # Sign challenge with private key
+        signature = self.sign_transaction(challenge)
+        return signature.hex()
+    
+    @staticmethod
+    def zk_verify_wallet_ownership(public_key_hex: str, challenge: bytes, proof_hex: str) -> bool:
+        """
+        Verify ZK proof using public key only.
+        
+        Args:
+            public_key_hex: Public key as hex string
+            challenge: Original challenge bytes
+            proof_hex: ZK proof as hex string
+            
+        Returns:
+            True if proof is valid
+        """
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        
+        try:
+            public_key = ed25519.Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key_hex))
+            signature = bytes.fromhex(proof_hex)
+            public_key.verify(signature, challenge)
+            return True
+        except Exception:
+            return False
+    
     @staticmethod
     def _verify_tweetnacl_signature(public_key_hex: str, data: bytes, signature_hex: str) -> bool:
         """

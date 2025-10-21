@@ -18,7 +18,10 @@ class IngestStore:
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES)
+        # Enable thread-safe mode for SQLite
+        conn = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
+        return conn
 
     def _init_db(self) -> None:
         with self._connect() as conn:

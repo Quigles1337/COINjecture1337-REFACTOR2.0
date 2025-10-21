@@ -51,6 +51,26 @@ class MemoryEfficientConsensusService:
         self.ingest_store = None
         self.running = False
         
+        # Initialize P2P discovery for automatic blockchain growth
+        try:
+            from p2p_discovery import P2PDiscoveryService, DiscoveryConfig
+            
+            discovery_config = DiscoveryConfig(
+                listen_port=12346,
+                bootstrap_nodes=[
+                    "167.172.213.70:12346",
+                    "167.172.213.70:12345",
+                    "167.172.213.70:5000"
+                ],
+                max_peers=100
+            )
+            
+            self.p2p_discovery = P2PDiscoveryService(discovery_config)
+            logger.info("🌐 P2P Discovery initialized for automatic blockchain growth")
+        except Exception as e:
+            logger.warning(f"⚠️  P2P Discovery not available: {e}")
+            self.p2p_discovery = None
+        
     def check_memory_usage(self):
         """Check current memory usage and trigger cleanup if needed"""
         try:
@@ -111,7 +131,17 @@ class MemoryEfficientConsensusService:
             if not self.bootstrap_from_cache_memory_efficient():
                 logger.warning("Bootstrap failed, starting fresh")
             
-            logger.info("✅ Memory-efficient consensus service initialized")
+            # Start P2P discovery for automatic blockchain growth
+            if self.p2p_discovery and self.p2p_discovery.start():
+                logger.info("✅ P2P Discovery started - discovering ALL network peers for blockchain growth")
+                time.sleep(5)  # Wait for initial discovery
+                
+                stats = self.p2p_discovery.get_peer_statistics()
+                logger.info(f"📊 Discovered {stats['total_discovered']} peers for automatic blockchain growth")
+            else:
+                logger.warning("⚠️  P2P Discovery failed to start - blockchain may not grow automatically")
+            
+            logger.info("✅ Memory-efficient consensus service initialized with P2P discovery")
             return True
             
         except Exception as e:
@@ -180,6 +210,9 @@ class MemoryEfficientConsensusService:
                 # Process events with memory management
                 self.process_events_memory_efficient()
                 
+                # Process new mining submissions for blockchain growth
+                self.process_new_mining_submissions()
+                
                 # Small delay to prevent excessive CPU usage
                 time.sleep(1)
                 
@@ -194,7 +227,62 @@ class MemoryEfficientConsensusService:
     
     def _dict_to_block(self, block_dict):
         """Convert dictionary to Block object."""
-        from core.blockchain import Block
+        from core.blockchain import Block, ComputationalComplexity, ProblemTier
+        
+        # Create proper complexity object from block data
+        work_score = block_dict.get("work_score", 0.0)
+        capacity = block_dict.get("capacity", "mobile")
+        
+        # Map capacity string to ProblemTier
+        capacity_map = {
+            'mobile': ProblemTier.TIER_1_MOBILE,
+            'desktop': ProblemTier.TIER_2_DESKTOP,
+            'workstation': ProblemTier.TIER_3_WORKSTATION,
+            'server': ProblemTier.TIER_4_SERVER,
+            'cluster': ProblemTier.TIER_5_CLUSTER
+        }
+        
+        tier = capacity_map.get(capacity.lower(), ProblemTier.TIER_1_MOBILE)
+        
+        # Estimate problem size from work score
+        problem_size = int(work_score.bit_length()) if work_score > 0 and isinstance(work_score, int) else 8
+        
+        # Create proper complexity object with correct parameters
+        complexity = ComputationalComplexity(
+            time_solve_O="O(n^2)",
+            time_solve_Omega="Ω(n)",
+            time_solve_Theta="Θ(n^2)",
+            time_verify_O="O(1)",
+            time_verify_Omega="Ω(1)",
+            time_verify_Theta="Θ(1)",
+            space_solve_O="O(n)",
+            space_solve_Omega="Ω(n)",
+            space_solve_Theta="Θ(n)",
+            space_verify_O="O(1)",
+            space_verify_Omega="Ω(1)",
+            space_verify_Theta="Θ(1)",
+            problem_class="NP",
+            problem_size=problem_size,
+            solution_size=problem_size,
+            epsilon_approximation=None,
+            asymmetry_time=work_score / 1000.0,
+            asymmetry_space=1.0,
+            measured_solve_time=work_score / 1000.0,
+            measured_verify_time=0.001,
+            measured_solve_space=1000000,
+            measured_verify_space=10000,
+            energy_metrics=EnergyMetrics(
+                solve_energy_joules=work_score * 0.1,
+                verify_energy_joules=0.01,
+                solve_power_watts=100.0,
+                verify_power_watts=10.0,
+                solve_time_seconds=work_score / 1000.0,
+                verify_time_seconds=0.001,
+                cpu_utilization=80.0,
+                memory_utilization=60.0,
+                gpu_utilization=0.0
+            )
+        )
         
         # Create Block object with required fields
         block = Block(
@@ -205,8 +293,8 @@ class MemoryEfficientConsensusService:
             merkle_root=block_dict.get("merkle_root", ""),
             problem=block_dict.get("problem", {}),
             solution=block_dict.get("solution", []),
-            complexity={},  # Empty dict to avoid 'str' object has no attribute errors
-            mining_capacity=block_dict.get("mining_capacity", "mobile"),
+            complexity=complexity,  # Proper ComputationalComplexity object
+            mining_capacity=tier,  # Use ProblemTier instead of string
             cumulative_work_score=block_dict.get("cumulative_work_score", 0),
             block_hash=block_dict.get("block_hash", "")
         )
@@ -250,6 +338,191 @@ class MemoryEfficientConsensusService:
                 
         except Exception as e:
             logger.error(f"Error processing events: {e}")
+    
+    def process_new_mining_submissions(self):
+        """Process new mining submissions and create blocks for blockchain growth"""
+        try:
+            # Get recent mining submissions from ingest store
+            recent_events = self.ingest_store.latest_blocks(limit=10)
+            
+            for event in recent_events:
+                if event.get('work_score', 0) > 0:  # Only process valid mining submissions
+                    self.create_new_block_from_mining(event)
+                    
+        except Exception as e:
+            logger.error(f"Error processing new mining submissions: {e}")
+    
+    def create_new_block_from_mining(self, mining_event):
+        """Create a new block from mining submission to grow the blockchain"""
+        try:
+            # Get current blockchain height
+            with open(self.blockchain_state_path, 'r') as f:
+                blockchain_data = json.load(f)
+            
+            current_height = len(blockchain_data.get('blocks', []))
+            new_height = current_height + 1
+            
+            # Create new block
+            new_block = {
+                "index": new_height,
+                "timestamp": time.time(),
+                "previous_hash": blockchain_data.get('latest_block', {}).get('block_hash', '0' * 64),
+                "miner_address": mining_event.get('miner_address', 'unknown'),
+                "work_score": mining_event.get('work_score', 0.0),
+                "capacity": mining_event.get('capacity', 'mobile'),
+                "block_hash": f"block_{new_height}_{int(time.time())}",
+                "merkle_root": "0" * 64,
+                "transactions": []
+            }
+            
+            # Add block to blockchain state
+            blockchain_data['blocks'].append(new_block)
+            blockchain_data['latest_block'] = new_block
+            blockchain_data['total_blocks'] = new_height
+            
+            # Write updated blockchain state
+            with open(self.blockchain_state_path, 'w') as f:
+                json.dump(blockchain_data, f, indent=2)
+            
+            logger.info(f"🆕 Created new block #{new_height} from mining submission by {mining_event.get('miner_address', 'unknown')}")
+            
+        except Exception as e:
+            logger.error(f"Error creating new block from mining: {e}")
+    
+    def _distribute_mining_rewards(self, event, block):
+        """Distribute mining rewards using dynamic tokenomics."""
+        try:
+            from src.tokenomics.dynamic_tokenomics import DynamicWorkScoreTokenomics
+            
+            if not hasattr(self, 'tokenomics'):
+                self.tokenomics = DynamicWorkScoreTokenomics()
+            
+            # Create complexity object from event
+            complexity = self._create_complexity_from_event(event)
+            
+            # Calculate reward using dynamic tokenomics
+            reward = self.tokenomics.calculate_block_reward(block, complexity)
+            
+            # Record in tokenomics system
+            miner_address = event.get('miner_address', '')
+            self.tokenomics.record_block(block, complexity, reward, miner_address)
+            
+            # Update database
+            self._update_rewards_database(miner_address, reward, event.get('work_score', 0.0))
+            
+            logger.info(f"💰 Dynamic reward: {reward:.6f} BEANS to {miner_address}")
+            logger.info(f"   Deflation factor: {self.tokenomics._calculate_deflation_factor():.6f}")
+            logger.info(f"   Cumulative work: {self.tokenomics.cumulative_work_score:,.0f}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to distribute mining rewards: {e}")
+    
+    def _create_complexity_from_event(self, event):
+        """Create ComputationalComplexity object from mining event."""
+        from src.core.blockchain import ComputationalComplexity, ProblemTier, EnergyMetrics
+        
+        work_score = event.get('work_score', 0.0)
+        capacity = event.get('capacity', 'mobile')
+        
+        # Map capacity string to ProblemTier
+        capacity_map = {
+            'mobile': ProblemTier.TIER_1_MOBILE,
+            'desktop': ProblemTier.TIER_2_DESKTOP,
+            'workstation': ProblemTier.TIER_3_WORKSTATION,
+            'server': ProblemTier.TIER_4_SERVER,
+            'cluster': ProblemTier.TIER_5_CLUSTER
+        }
+        
+        tier = capacity_map.get(capacity.lower(), ProblemTier.TIER_1_MOBILE)
+        
+        # Estimate problem size from work score
+        problem_size = int(work_score.bit_length()) if work_score > 0 and isinstance(work_score, int) else 8
+        
+        # Create energy metrics object
+        energy_metrics = EnergyMetrics(
+            solve_energy_joules=work_score * 0.1,
+            verify_energy_joules=0.01,
+            solve_power_watts=100.0,
+            verify_power_watts=10.0,
+            solve_time_seconds=work_score / 1000.0,
+            verify_time_seconds=0.001,
+            cpu_utilization=80.0,
+            memory_utilization=60.0,
+            gpu_utilization=0.0
+        )
+        
+        # Create complexity object with correct parameters
+        complexity = ComputationalComplexity(
+            time_solve_O="O(n^2)",
+            time_solve_Omega="Ω(n)",
+            time_solve_Theta="Θ(n^2)",
+            time_verify_O="O(1)",
+            time_verify_Omega="Ω(1)",
+            time_verify_Theta="Θ(1)",
+            space_solve_O="O(n)",
+            space_solve_Omega="Ω(n)",
+            space_solve_Theta="Θ(n)",
+            space_verify_O="O(1)",
+            space_verify_Omega="Ω(1)",
+            space_verify_Theta="Θ(1)",
+            problem_class="NP",
+            problem_size=problem_size,
+            solution_size=problem_size,
+            epsilon_approximation=None,
+            asymmetry_time=work_score / 1000.0,
+            asymmetry_space=1.0,
+            measured_solve_time=work_score / 1000.0,
+            measured_verify_time=0.001,
+            measured_solve_space=1000000,
+            measured_verify_space=10000,
+            energy_metrics=energy_metrics
+        )
+        
+        return complexity
+    
+    def _update_rewards_database(self, miner_address, reward, work_score):
+        """Update rewards database with new reward."""
+        try:
+            import sqlite3
+            
+            # Connect to database
+            conn = sqlite3.connect('/opt/coinjecture-consensus/data/faucet_ingest.db')
+            cursor = conn.cursor()
+            
+            # Check if miner exists
+            cursor.execute('SELECT total_rewards, blocks_mined, total_work_score FROM work_based_rewards WHERE miner_address = ?', (miner_address,))
+            result = cursor.fetchone()
+            
+            if result:
+                # Update existing miner
+                total_rewards, blocks_mined, total_work_score = result
+                new_total_rewards = total_rewards + reward
+                new_blocks_mined = blocks_mined + 1
+                new_total_work_score = total_work_score + work_score
+                new_average_reward = new_total_rewards / new_blocks_mined
+                new_average_work_score = new_total_work_score / new_blocks_mined
+                
+                cursor.execute('''
+                    UPDATE work_based_rewards 
+                    SET total_rewards = ?, blocks_mined = ?, total_work_score = ?, 
+                        average_reward = ?, average_work_score = ?, last_updated = ?
+                    WHERE miner_address = ?
+                ''', (new_total_rewards, new_blocks_mined, new_total_work_score, 
+                      new_average_reward, new_average_work_score, time.time(), miner_address))
+            else:
+                # Insert new miner
+                cursor.execute('''
+                    INSERT INTO work_based_rewards 
+                    (miner_address, total_rewards, blocks_mined, total_work_score, 
+                     average_reward, average_work_score, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (miner_address, reward, 1, work_score, reward, work_score, time.time()))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to update rewards database: {e}")
 
 def main():
     """Main function"""

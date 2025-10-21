@@ -9,8 +9,19 @@
   <title>COINjecture</title>
   <link rel="stylesheet" href="./style.css">
   <link rel="icon" href="data:,">
-  <!-- @noble/ed25519 library temporarily removed due to CDN issues -->
-  <!-- Will be re-added once a working CDN is found -->
+  <!-- @noble/ed25519 library for cryptographic wallet functionality -->
+  <script src="https://unpkg.com/@noble/ed25519@2.0.0/index.js" onerror="loadEd25519Fallback()"></script>
+  <script>
+    function loadEd25519Fallback() {
+      console.log('Primary Ed25519 CDN failed, trying fallback...');
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@noble/ed25519@2.0.0/index.js';
+      script.onerror = function() {
+        console.error('All Ed25519 CDNs failed - using demo wallets');
+      };
+      document.head.appendChild(script);
+    }
+  </script>
 </head>
 <body>
   <!-- Navigation Bar -->
@@ -90,8 +101,58 @@
             </div>
             <div class="endpoint">
               <span class="method">POST</span>
-              <span class="path">/v1/mine</span>
-              <span class="description">Start mining operation</span>
+              <span class="path">/v1/ingest/block</span>
+              <span class="description">Submit mining block</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">POST</span>
+              <span class="path">/v1/ingest/block/cli</span>
+              <span class="description">Submit mining block from CLI</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/consensus/status</span>
+              <span class="description">Get consensus engine status</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/rewards/{address}</span>
+              <span class="description">Get mining rewards for address</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/rewards/leaderboard</span>
+              <span class="description">Get mining leaderboard</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">POST</span>
+              <span class="path">/v1/wallet/register</span>
+              <span class="description">Register wallet for persistence</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">POST</span>
+              <span class="path">/v1/wallet/verify</span>
+              <span class="description">Verify wallet ownership</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/ipfs/user/{address}</span>
+              <span class="description">Get IPFS data for wallet</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/ipfs/stats/{address}</span>
+              <span class="description">Get IPFS statistics for wallet</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/ipfs/download/{address}</span>
+              <span class="description">Download IPFS data (JSON/CSV)</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/health</span>
+              <span class="description">API health check</span>
             </div>
           </div>
           
@@ -104,6 +165,66 @@
             <h3>Test API</h3>
             <button id="test-api-btn" class="test-btn">Test Connection</button>
             <div id="api-test-result"></div>
+          </div>
+        </div>
+        
+        <div class="api-section">
+          <h2>API Categories</h2>
+          <div class="api-categories">
+            <div class="category">
+              <h3>🔗 Blockchain Data</h3>
+              <ul>
+                <li><code>GET /v1/data/block/latest</code> - Latest block</li>
+                <li><code>GET /v1/data/block/{index}</code> - Block by index</li>
+                <li><code>GET /v1/peers</code> - Network peers</li>
+                <li><code>GET /v1/consensus/status</code> - Consensus status</li>
+              </ul>
+            </div>
+            <div class="category">
+              <h3>⛏️ Mining & Rewards</h3>
+              <ul>
+                <li><code>POST /v1/ingest/block</code> - Submit mining block</li>
+                <li><code>GET /v1/rewards/{address}</code> - Get rewards</li>
+                <li><code>GET /v1/rewards/leaderboard</code> - Leaderboard</li>
+              </ul>
+            </div>
+            <div class="category">
+              <h3>🔐 Wallet Management</h3>
+              <ul>
+                <li><code>POST /v1/wallet/register</code> - Register wallet</li>
+                <li><code>POST /v1/wallet/verify</code> - Verify wallet</li>
+              </ul>
+            </div>
+            <div class="category">
+              <h3>📦 IPFS Data</h3>
+              <ul>
+                <li><code>GET /v1/ipfs/user/{address}</code> - User IPFS data</li>
+                <li><code>GET /v1/ipfs/stats/{address}</code> - IPFS statistics</li>
+                <li><code>GET /v1/ipfs/download/{address}</code> - Download data</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div class="api-section">
+          <h2>Rate Limits</h2>
+          <div class="rate-limits">
+            <div class="rate-limit">
+              <span class="endpoint">/v1/ingest/block</span>
+              <span class="limit">60 requests/minute</span>
+            </div>
+            <div class="rate-limit">
+              <span class="endpoint">/v1/wallet/register</span>
+              <span class="limit">10 requests/minute</span>
+            </div>
+            <div class="rate-limit">
+              <span class="endpoint">/v1/ipfs/download</span>
+              <span class="limit">10 requests/minute</span>
+            </div>
+            <div class="rate-limit">
+              <span class="endpoint">All other endpoints</span>
+              <span class="limit">100 requests/minute</span>
+            </div>
           </div>
         </div>
       </div>
