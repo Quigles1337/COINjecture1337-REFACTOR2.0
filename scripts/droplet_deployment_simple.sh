@@ -595,3 +595,6 @@ echo "sudo tail -f /home/coinjecture/COINjecture/logs/consensus_service.log"
 echo ""
 echo "🧪 Test network advancement:"
 echo "curl -k https://167.172.213.70/v1/data/block/latest"
+
+
+

@@ -2483,6 +2483,27 @@ class WebInterface {
       document.getElementById('success-rate').textContent = metrics.blockchain.success_rate + '%';
     }
 
+    // Update Consensus Equilibrium Metrics
+    if (metrics.consensus && metrics.consensus.equilibrium_proof) {
+      const eq = metrics.consensus.equilibrium_proof;
+      document.getElementById('satoshi-constant').textContent = eq.satoshi_constant.toFixed(6);
+      document.getElementById('damping-ratio').textContent = eq.damping_ratio.toFixed(6);
+      document.getElementById('coupling-strength').textContent = eq.coupling_strength.toFixed(6);
+      document.getElementById('stability-metric').textContent = eq.stability_metric.toFixed(6);
+      document.getElementById('fork-resistance').textContent = eq.fork_resistance.toFixed(6);
+      document.getElementById('liveness-guarantee').textContent = eq.liveness_guarantee.toFixed(6);
+      document.getElementById('nash-equilibrium').textContent = eq.nash_equilibrium ? '✅ Optimal' : '❌ Suboptimal';
+    }
+
+    // Update Proof of Work Metrics
+    if (metrics.consensus && metrics.consensus.proof_of_work) {
+      const pow = metrics.consensus.proof_of_work;
+      document.getElementById('commitment-formula').textContent = pow.commitment_scheme;
+      document.getElementById('anti-grinding').textContent = pow.anti_grinding ? '✅ Enabled' : '❌ Disabled';
+      document.getElementById('cryptographic-binding').textContent = pow.cryptographic_binding ? '✅ Enabled' : '❌ Disabled';
+      document.getElementById('hiding-property').textContent = pow.hiding_property ? '✅ Enabled' : '❌ Disabled';
+    }
+
     // Update TPS
     if (metrics.transactions) {
       document.getElementById('tps-current').textContent = (metrics.transactions.tps_current || 0).toFixed(2);

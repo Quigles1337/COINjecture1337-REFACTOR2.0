@@ -443,6 +443,65 @@
           </div>
         </div>
         
+        <!-- Consensus Equilibrium Metrics -->
+        <div class="consensus-equilibrium">
+          <div class="equilibrium-card">
+            <div class="equilibrium-header">⚖️ Consensus Equilibrium (Satoshi Constant)</div>
+            <div class="equilibrium-content">
+              <div class="equilibrium-item">
+                <span class="label">Satoshi Constant (λ=η):</span>
+                <span class="value" id="satoshi-constant">0.707107</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Damping Ratio (η):</span>
+                <span class="value" id="damping-ratio">0.707107</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Coupling Strength (λ):</span>
+                <span class="value" id="coupling-strength">0.707107</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Stability Metric:</span>
+                <span class="value" id="stability-metric">1.000000</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Fork Resistance:</span>
+                <span class="value" id="fork-resistance">0.292893</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Liveness Guarantee:</span>
+                <span class="value" id="liveness-guarantee">0.707107</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Nash Equilibrium:</span>
+                <span class="value" id="nash-equilibrium">✅ Optimal</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="proof-of-work-card">
+            <div class="pow-header">🔐 Proof of Work (Commitment Scheme)</div>
+            <div class="pow-content">
+              <div class="pow-item">
+                <span class="label">Commitment Formula:</span>
+                <span class="value" id="commitment-formula">H(problem_params || miner_salt || epoch_salt || H(solution))</span>
+              </div>
+              <div class="pow-item">
+                <span class="label">Anti-Grinding:</span>
+                <span class="value" id="anti-grinding">✅ Enabled</span>
+              </div>
+              <div class="pow-item">
+                <span class="label">Cryptographic Binding:</span>
+                <span class="value" id="cryptographic-binding">✅ Enabled</span>
+              </div>
+              <div class="pow-item">
+                <span class="label">Hiding Property:</span>
+                <span class="value" id="hiding-property">✅ Enabled</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <div class="metrics-grid">
           <!-- TPS Card -->
           <div class="metric-card">

@@ -1486,3 +1486,76 @@ code {
     min-width: auto;
   }
 }
+
+/* Consensus Equilibrium Metrics */
+.consensus-equilibrium {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.equilibrium-card, .proof-of-work-card {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.equilibrium-header, .pow-header {
+  font-size: 18px;
+  font-weight: 600;
+  color: #4CAF50;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.equilibrium-content, .pow-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.equilibrium-item, .pow-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.equilibrium-item:last-child, .pow-item:last-child {
+  border-bottom: none;
+}
+
+.equilibrium-item .label, .pow-item .label {
+  font-weight: 500;
+  color: #ccc;
+  font-size: 14px;
+}
+
+.equilibrium-item .value, .pow-item .value {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.pow-item .value {
+  color: #9d7ce8;
+}
+
+/* Responsive consensus metrics */
+@media (max-width: 768px) {
+  .consensus-equilibrium {
+    grid-template-columns: 1fr;
+  }
+  
+  .equilibrium-item, .pow-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

@@ -37,3 +37,6 @@ echo "   curl -k https://167.172.213.70/v1/data/block/latest"
 echo ""
 echo "✅ Enhanced wallet.py ready for deployment!"
 echo "🔧 This fix will resolve the signature validation errors causing network stalling"
+
+
+

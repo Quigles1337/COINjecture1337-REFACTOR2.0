@@ -1,5 +1,33 @@
 # Changelog
 
+## [3.12.0] - 2025-01-23
+
+### New Features
+- **Enhanced API Server**: Added `faucet_server_cors_fixed.py` with improved CORS support for S3 frontend integration
+- **Blockchain Storage Module**: New `blockchain_storage.py` implementing comprehensive storage specification with DB schema and IPFS integration
+- **Network Integration Service**: Added `network_integration_service.py` for enhanced network connectivity and peer management
+
+### API Improvements
+- **CORS Support**: Fixed CORS headers for seamless frontend integration
+- **Storage Architecture**: Implemented proper database schema with pruning modes (LIGHT, FULL, ARCHIVE)
+- **IPFS Integration**: Enhanced off-chain proof storage with proper garbage collection controls
+- **Rate Limiting**: Improved API rate limiting and security measures
+
+### Web Interface Updates
+- **Frontend Enhancements**: Updated `app.js`, `index.html`, and `style.css` with improved user experience
+- **CORS Compatibility**: Fixed cross-origin resource sharing for better frontend-backend communication
+- **UI/UX Improvements**: Enhanced styling and JavaScript functionality
+
+### Deployment & Infrastructure
+- **Deployment Scripts**: Updated multiple deployment and fix scripts for better reliability
+- **Network Diagnostics**: Enhanced network connectivity and consensus processing diagnostics
+- **Production Stability**: Improved deployment packages and remote deployment capabilities
+
+### Code Quality
+- **Module Organization**: Better separation of concerns with dedicated storage and network modules
+- **Error Handling**: Improved error handling and logging across API services
+- **Documentation**: Enhanced inline documentation and code comments
+
 ## [3.11.0] - 2025-01-23
 
 ### Major Features

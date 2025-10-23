@@ -218,3 +218,6 @@ echo "- If no peers: Fix P2P discovery"
 echo "- If API errors: Check API service"
 echo ""
 echo "📋 Run this script and analyze the output to identify the root cause!"
+
+
+

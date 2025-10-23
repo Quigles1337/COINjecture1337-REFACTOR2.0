@@ -469,3 +469,6 @@ echo "✅ Consensus service should now process pending blocks"
 echo "✅ Frontend should show correct block count"
 echo ""
 echo "📊 Monitor the results above to confirm success"
+
+
+
