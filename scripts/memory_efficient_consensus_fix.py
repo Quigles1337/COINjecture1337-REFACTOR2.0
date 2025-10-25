@@ -17,14 +17,14 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/opt/coinjecture-consensus/logs/memory_efficient_fix.log'),
+        logging.FileHandler('/opt/coinjecture/logs/memory_efficient_fix.log'),
         logging.StreamHandler()
     ]
 )
 
 class MemoryEfficientConsensusFix:
     def __init__(self):
-        self.base_path = Path('/opt/coinjecture-consensus')
+        self.base_path = Path('/opt/coinjecture')
         self.blockchain_state_path = self.base_path / 'data' / 'blockchain_state.json'
         self.consensus_db_path = self.base_path / 'data' / 'blockchain.db'
         self.logs_path = self.base_path / 'logs'

@@ -447,13 +447,13 @@ sleep 5
 
 # Step 2: Deploy enhanced P2P discovery
 echo "🔧 Step 2: Deploying enhanced P2P discovery..."
-sudo cp /tmp/enhanced_p2p_discovery.py /opt/coinjecture-consensus/enhanced_p2p_discovery.py
-sudo chmod +x /opt/coinjecture-consensus/enhanced_p2p_discovery.py
+sudo cp /tmp/enhanced_p2p_discovery.py /opt/coinjecture/enhanced_p2p_discovery.py
+sudo chmod +x /opt/coinjecture/enhanced_p2p_discovery.py
 
 # Step 3: Update P2P discovery service
 echo "🔄 Step 3: Updating P2P discovery service..."
-sudo cp /home/coinjecture/COINjecture/src/p2p_discovery.py /opt/coinjecture-consensus/p2p_discovery.py.backup.$(date +%Y%m%d_%H%M%S)
-sudo cp /tmp/enhanced_p2p_discovery.py /opt/coinjecture-consensus/p2p_discovery.py
+sudo cp /home/coinjecture/COINjecture/src/p2p_discovery.py /opt/coinjecture/p2p_discovery.py.backup.$(date +%Y%m%d_%H%M%S)
+sudo cp /tmp/enhanced_p2p_discovery.py /opt/coinjecture/p2p_discovery.py
 
 # Step 4: Start services in correct order
 echo "🚀 Step 4: Starting services..."
@@ -478,7 +478,7 @@ except Exception as e:
 "
 
 # Test P2P discovery
-python3 /opt/coinjecture-consensus/enhanced_p2p_discovery.py &
+python3 /opt/coinjecture/enhanced_p2p_discovery.py &
 DISCOVERY_PID=$!
 sleep 30
 kill $DISCOVERY_PID 2>/dev/null

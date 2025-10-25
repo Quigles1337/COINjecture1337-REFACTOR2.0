@@ -88,7 +88,7 @@ grep -r "faucet_ingest.db" /home/coinjecture/COINjecture/src/ 2>/dev/null || ech
 echo ""
 echo "📊 Step 9: Testing consensus service database access..."
 echo "📊 Testing database access from consensus service directory:"
-cd /opt/coinjecture-consensus 2>/dev/null && python3 -c "
+cd /opt/coinjecture 2>/dev/null && python3 -c "
 import sqlite3
 try:
     conn = sqlite3.connect('/home/coinjecture/COINjecture/data/faucet_ingest.db')
@@ -105,7 +105,7 @@ except Exception as e:
 echo ""
 echo "📊 Step 10: Checking if consensus service is running enhanced version..."
 echo "📊 Checking consensus service code for P2P discovery:"
-grep -r "p2p_discovery\|P2PDiscoveryService" /opt/coinjecture-consensus/ 2>/dev/null || echo "❌ No P2P discovery found in consensus service"
+grep -r "p2p_discovery\|P2PDiscoveryService" /opt/coinjecture/ 2>/dev/null || echo "❌ No P2P discovery found in consensus service"
 
 echo ""
 echo "🎯 DIAGNOSIS COMPLETE!"

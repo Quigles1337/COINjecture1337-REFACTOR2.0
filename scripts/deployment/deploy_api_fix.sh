@@ -76,7 +76,7 @@ class FaucetAPI:
         """
         self.app = Flask(__name__)
         self.cache_manager = CacheManager(cache_dir)
-        self.ingest_store = IngestStore("/opt/coinjecture-consensus/data/faucet_ingest.db")
+        self.ingest_store = IngestStore("/opt/coinjecture/data/faucet_ingest.db")
         # TODO: load from env or config
         self.auth = HMACAuth(secret=os.environ.get("FAUCET_HMAC_SECRET", "dev-secret"))
         

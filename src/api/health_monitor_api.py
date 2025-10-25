@@ -26,7 +26,7 @@ class HealthMonitorAPI:
     def __init__(self):
         self.consensus_service = "coinjecture-consensus"
         self.automatic_processor = "coinjecture-automatic-processor"
-        self.blockchain_state_path = "/opt/coinjecture-consensus/data/blockchain_state.json"
+        self.blockchain_state_path = "/opt/coinjecture/data/blockchain_state.json"
         self.cache_path = "/home/coinjecture/COINjecture/data/cache/latest_block.json"
     
     def check_service_status(self, service_name):
@@ -168,7 +168,7 @@ class HealthMonitorAPI:
             time.sleep(2)
             
             # Clear consensus database
-            consensus_db = "/opt/coinjecture-consensus/data/blockchain.db"
+            consensus_db = "/opt/coinjecture/data/blockchain.db"
             if os.path.exists(consensus_db):
                 os.remove(consensus_db)
             

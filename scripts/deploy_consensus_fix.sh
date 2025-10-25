@@ -9,7 +9,7 @@ echo "🎯 Solution: Health monitoring with auto-restart and proper bootstrap"
 echo ""
 
 # Check if we're on the droplet
-if [ ! -f "/opt/coinjecture-consensus/consensus_service.py" ]; then
+if [ ! -f "/opt/coinjecture/consensus_service.py" ]; then
     echo "❌ This script must be run on the droplet (167.172.213.70)"
     exit 1
 fi
@@ -19,8 +19,8 @@ echo "✅ Confirmed on droplet"
 # Step 1: Deploy health monitor script
 echo ""
 echo "📦 Step 1: Deploying consensus health monitor..."
-cp /tmp/consensus_health_monitor.py /opt/coinjecture-consensus/
-chmod +x /opt/coinjecture-consensus/consensus_health_monitor.py
+cp /tmp/consensus_health_monitor.py /opt/coinjecture/
+chmod +x /opt/coinjecture/consensus_health_monitor.py
 echo "✅ Health monitor script deployed"
 
 # Step 2: Deploy health monitor API
@@ -106,8 +106,8 @@ echo "  - Automatic Processor: $(systemctl is-active coinjecture-automatic-proce
 echo "  - Health Monitor: $(systemctl is-active coinjecture-consensus-monitor)"
 
 # Check blockchain state
-if [ -f "/opt/coinjecture-consensus/data/blockchain_state.json" ]; then
-    BLOCK_COUNT=$(python3 -c "import json; data=json.load(open('/opt/coinjecture-consensus/data/blockchain_state.json')); print(len(data.get('blocks', [])))")
+if [ -f "/opt/coinjecture/data/blockchain_state.json" ]; then
+    BLOCK_COUNT=$(python3 -c "import json; data=json.load(open('/opt/coinjecture/data/blockchain_state.json')); print(len(data.get('blocks', [])))")
     echo "  - Blockchain blocks: $BLOCK_COUNT"
 else
     echo "  - Blockchain state: Not found"

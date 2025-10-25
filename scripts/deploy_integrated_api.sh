@@ -60,7 +60,7 @@ limiter = Limiter(
 
 def get_database_connection():
     """Get database connection."""
-    return sqlite3.connect("/opt/coinjecture-consensus/faucet_ingest.db")
+    return sqlite3.connect("/opt/coinjecture/faucet_ingest.db")
 
 def add_block_to_blockchain(block_data):
     """Add a new block to the consecutive_blockchain table."""
@@ -385,7 +385,7 @@ echo "🔧 Creating consecutive_blockchain table..."
 python3 << 'EOF'
 import sqlite3
 try:
-    conn = sqlite3.connect("/opt/coinjecture-consensus/faucet_ingest.db")
+    conn = sqlite3.connect("/opt/coinjecture/faucet_ingest.db")
     cursor = conn.cursor()
     
     # Create consecutive_blockchain table

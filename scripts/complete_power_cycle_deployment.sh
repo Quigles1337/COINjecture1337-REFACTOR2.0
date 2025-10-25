@@ -282,9 +282,9 @@ if __name__ == "__main__":
 EOF
 
 # Deploy enhanced P2P discovery service
-sudo cp /tmp/enhanced_p2p_discovery.py /opt/coinjecture-consensus/enhanced_p2p_discovery.py
-sudo chown coinjecture:coinjecture /opt/coinjecture-consensus/enhanced_p2p_discovery.py
-sudo chmod +x /opt/coinjecture-consensus/enhanced_p2p_discovery.py
+sudo cp /tmp/enhanced_p2p_discovery.py /opt/coinjecture/enhanced_p2p_discovery.py
+sudo chown coinjecture:coinjecture /opt/coinjecture/enhanced_p2p_discovery.py
+sudo chmod +x /opt/coinjecture/enhanced_p2p_discovery.py
 echo "✅ Enhanced P2P Discovery Service deployed"
 
 # Step 3: Deploy enhanced signature validation

@@ -25,9 +25,9 @@ echo "🔧 Consolidating Data Sources on Droplet"
 echo "========================================"
 
 # Define the 3 authorized data sources
-PRIMARY_SOURCE="/opt/coinjecture-consensus/data/blockchain_state.json"
+PRIMARY_SOURCE="/opt/coinjecture/data/blockchain_state.json"
 CACHE_DIR="/home/coinjecture/COINjecture/data/cache"
-DATABASE="/opt/coinjecture-consensus/data/blockchain.db"
+DATABASE="/opt/coinjecture/data/blockchain.db"
 
 echo "📊 Current data sources:"
 echo "   1. Primary: $PRIMARY_SOURCE"
@@ -119,15 +119,15 @@ from typing import Dict, List, Optional, Any
 class SimplifiedCacheManager:
     """
     Simplified cache manager using only 3 data sources:
-    1. Primary: /opt/coinjecture-consensus/data/blockchain_state.json
+    1. Primary: /opt/coinjecture/data/blockchain_state.json
     2. Cache: /home/coinjecture/COINjecture/data/cache/
-    3. Database: /opt/coinjecture-consensus/data/blockchain.db
+    3. Database: /opt/coinjecture/data/blockchain.db
     """
     
     def __init__(self, cache_dir: str = "/home/coinjecture/COINjecture/data/cache"):
         self.cache_dir = Path(cache_dir)
-        self.primary_source = "/opt/coinjecture-consensus/data/blockchain_state.json"
-        self.database = "/opt/coinjecture-consensus/data/blockchain.db"
+        self.primary_source = "/opt/coinjecture/data/blockchain_state.json"
+        self.database = "/opt/coinjecture/data/blockchain.db"
         
         # Ensure cache directory exists
         self.cache_dir.mkdir(parents=True, exist_ok=True)

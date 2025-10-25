@@ -53,7 +53,7 @@ sudo systemctl show coinjecture-consensus.service --property=ExecStart --value
 # Step 2: Check if consensus service can access the database
 echo ""
 echo "📊 Step 2: Testing database access from consensus service directory..."
-cd /opt/coinjecture-consensus
+cd /opt/coinjecture
 python3 -c "
 import sqlite3
 import os
@@ -87,7 +87,7 @@ except Exception as e:
 # Step 3: Check consensus service code for database path
 echo ""
 echo "📊 Step 3: Checking consensus service code for database path..."
-cd /opt/coinjecture-consensus
+cd /opt/coinjecture
 grep -r "faucet_ingest.db" . 2>/dev/null || echo "❌ No database path found in consensus service code"
 
 # Step 4: Fix the consensus service database path
@@ -362,9 +362,9 @@ if __name__ == "__main__":
 EOF
 
 # Deploy the fixed consensus service
-sudo cp /tmp/consensus_service_fixed.py /opt/coinjecture-consensus/consensus_service_fixed.py
-sudo chown coinjecture:coinjecture /opt/coinjecture-consensus/consensus_service_fixed.py
-sudo chmod +x /opt/coinjecture-consensus/consensus_service_fixed.py
+sudo cp /tmp/consensus_service_fixed.py /opt/coinjecture/consensus_service_fixed.py
+sudo chown coinjecture:coinjecture /opt/coinjecture/consensus_service_fixed.py
+sudo chmod +x /opt/coinjecture/consensus_service_fixed.py
 
 echo "✅ Fixed consensus service deployed"
 
@@ -386,8 +386,8 @@ After=network.target
 Type=simple
 User=coinjecture
 Group=coinjecture
-WorkingDirectory=/opt/coinjecture-consensus
-ExecStart=/opt/coinjecture-consensus/.venv/bin/python3 consensus_service_fixed.py
+WorkingDirectory=/opt/coinjecture
+ExecStart=/opt/coinjecture/.venv/bin/python3 consensus_service_fixed.py
 Restart=always
 RestartSec=5
 

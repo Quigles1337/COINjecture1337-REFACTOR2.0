@@ -1,5 +1,41 @@
 # Changelog
 
+## [3.13.14] - 2025-01-25
+
+### Major Features
+- **Dynamic Gas Calculation**: Implemented IPFS-based gas calculation system that scales with actual computational complexity
+- **Database Gas Recalculation**: Updated all 1,199 existing blocks with real gas values based on computational work
+- **IPFS Integration**: Enhanced IPFS data retrieval with CID-based complexity metrics for accurate gas pricing
+
+### Gas System Improvements
+- **Real-time Gas Calculation**: Gas costs now range from ~38,000 to 600,000+ gas based on actual problem complexity
+- **IPFS Data Structure**: Implemented comprehensive problem/solution data structure with size, difficulty, solve time, memory usage
+- **Fallback System**: CID-based data generation when IPFS data unavailable for consistent gas calculation
+- **Complexity Metrics**: Time asymmetry, space asymmetry, and problem weight calculations
+
+### API Enhancements
+- **Enhanced Storage Module**: Updated `blockchain_storage.py` with IPFS data retrieval and gas calculation
+- **Dynamic Gas Endpoints**: API now returns varied gas values instead of fixed 11,000 gas
+- **Real-time Mining**: Live mining process now uses dynamic gas calculation
+- **Frontend Integration**: Recent Transactions now display true gas diversity
+
+### Documentation Updates
+- **ARCHITECTURE.md**: Comprehensive gas calculation documentation with IPFS integration details
+- **Technical Specifications**: Added gas range examples, IPFS data structure, and complexity metrics
+- **Implementation Guide**: Documented dynamic gas calculation process and fallback systems
+
+### Performance Improvements
+- **Gas Range**: Simple problems (~38K-110K gas), Medium (~200K-400K gas), Complex (~500K-600K gas)
+- **Database Optimization**: Efficient gas recalculation for all existing blocks
+- **Real-time Processing**: Live mining with dynamic gas calculation
+- **IPFS Performance**: Optimized CID-based data retrieval and generation
+
+### Bug Fixes
+- **Fixed Gas Calculation**: Resolved issue where all blocks showed 11,000 gas
+- **Live Mining**: Fixed live mining to use new gas calculation system
+- **Frontend Display**: Recent Transactions now show varied gas values
+- **Database Consistency**: All blocks now have accurate gas values
+
 ## [3.12.0] - 2025-01-23
 
 ### New Features

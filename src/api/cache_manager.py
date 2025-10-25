@@ -239,7 +239,7 @@ class CacheManager:
             import sqlite3
             
             # Connect to the database
-            db_path = "/opt/coinjecture-consensus/data/faucet_ingest.db"
+            db_path = "/opt/coinjecture/data/faucet_ingest.db"
             if os.path.exists(db_path):
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
@@ -272,7 +272,7 @@ class CacheManager:
                                 latest = (real_block_count - 1, latest[1], latest[2])
                 except:
                     # Fallback to blockchain_state.json if consensus API not available
-                    blockchain_state_path = "/opt/coinjecture-consensus/data/blockchain_state.json"
+                    blockchain_state_path = "/opt/coinjecture/data/blockchain_state.json"
                     if os.path.exists(blockchain_state_path):
                         with open(blockchain_state_path, 'r') as f:
                             blockchain_data = json.load(f)
@@ -325,7 +325,7 @@ class CacheManager:
             import sqlite3
             
             # Connect to the database
-            db_path = "/opt/coinjecture-consensus/data/faucet_ingest.db"
+            db_path = "/opt/coinjecture/data/faucet_ingest.db"
             if os.path.exists(db_path):
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
@@ -527,7 +527,7 @@ class CacheManager:
             import sqlite3
             
             # Connect to the database
-            db_path = "/opt/coinjecture-consensus/data/faucet_ingest.db"
+            db_path = "/opt/coinjecture/data/faucet_ingest.db"
             if os.path.exists(db_path):
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()

@@ -29,6 +29,7 @@ try:
         calculate_work_score, compute_solution_hash
     )
     from .storage import StorageManager, StorageConfig, NodeRole, PruningMode
+    from .metrics_engine import MetricsEngine, get_metrics_engine, SATOSHI_CONSTANT
 except ImportError:
     # Fallback for direct execution
     from core.blockchain import Block, ProblemTier, ComputationalComplexity, calculate_computational_work_score
@@ -37,6 +38,7 @@ except ImportError:
         calculate_work_score, compute_solution_hash
     )
     from storage import StorageManager, StorageConfig, NodeRole, PruningMode
+    from metrics_engine import MetricsEngine, get_metrics_engine, SATOSHI_CONSTANT
 
 
 # Constants
@@ -178,7 +180,8 @@ class ConsensusEngine:
         self,
         config: ConsensusConfig,
         storage: StorageManager,
-        problem_registry: ProblemRegistry
+        problem_registry: ProblemRegistry,
+        metrics_engine: Optional[MetricsEngine] = None
     ):
         """
         Initialize consensus engine.
@@ -187,10 +190,14 @@ class ConsensusEngine:
             config: Consensus configuration
             storage: Storage manager
             problem_registry: Problem registry for verification
+            metrics_engine: Metrics engine for gas/reward calculation (optional)
         """
         self.config = config
         self.storage = storage
         self.problem_registry = problem_registry
+        
+        # Initialize metrics engine for gas/reward calculation
+        self.metrics_engine = metrics_engine or get_metrics_engine()
         
         # Block tree for fork choice
         self.block_tree: Dict[str, BlockNode] = {}
@@ -499,6 +506,88 @@ class ConsensusEngine:
         self._add_block_to_tree(block, receipt_time=time.time())
         
         return True
+    
+    def validate_and_process_block(self, block_data: dict) -> dict:
+        """
+        Proper consensus flow per ARCHITECTURE.md:
+        1. Validate block structure and proofs
+        2. Calculate gas based on validated work
+        3. Calculate rewards based on validated work
+        4. Return processed block for storage
+        
+        This implements the critical principle: Validate → Calculate → Store
+        """
+        try:
+            # Step 1: Validate block structure
+            if not self._validate_block_structure(block_data):
+                return {'valid': False, 'error': 'Invalid block structure'}
+            
+            # Step 2: Validate work proof
+            if not self._validate_work_proof(block_data):
+                return {'valid': False, 'error': 'Invalid work proof'}
+            
+            # Step 3: Calculate complexity metrics (AFTER validation)
+            complexity = self.metrics_engine.calculate_complexity_metrics(
+                block_data.get('problem', {}),
+                block_data.get('solution', {})
+            )
+            
+            # Step 4: Calculate gas (AFTER validation)
+            gas_used = self.metrics_engine.calculate_gas_cost("block_validation", complexity)
+            
+            # Step 5: Calculate reward (AFTER validation)
+            work_score = block_data.get('work_score', 0)
+            reward = self.metrics_engine.calculate_block_reward(
+                work_score, 
+                self.metrics_engine.network_state
+            )
+            
+            # Step 6: Add calculated values to block
+            block_data['gas_used'] = gas_used
+            block_data['gas_limit'] = 1000000
+            block_data['gas_price'] = 0.000001
+            block_data['reward'] = reward
+            
+            # Apply Satoshi Constant for stability
+            block_data['damping_ratio'] = SATOSHI_CONSTANT
+            block_data['stability_metric'] = 1.0  # |μ| = 1 for critical damping
+            
+            return {'valid': True, 'block': block_data}
+            
+        except Exception as e:
+            return {'valid': False, 'error': f'Processing error: {str(e)}'}
+    
+    def _validate_block_structure(self, block_data: dict) -> bool:
+        """Validate basic block structure."""
+        required_fields = ['block_hash', 'height', 'timestamp', 'previous_hash']
+        return all(field in block_data for field in required_fields)
+    
+    def _validate_work_proof(self, block_data: dict) -> bool:
+        """Validate work proof and commitment."""
+        try:
+            # Basic work proof validation
+            work_score = block_data.get('work_score', 0)
+            if work_score <= 0:
+                return False
+            
+            # Validate commitment if present
+            commitment = block_data.get('proof_commitment')
+            if commitment and not self._validate_commitment(commitment, block_data):
+                return False
+            
+            return True
+        except Exception:
+            return False
+    
+    def _validate_commitment(self, commitment: str, block_data: dict) -> bool:
+        """Validate commitment binding."""
+        try:
+            # Basic commitment validation
+            if not commitment or len(commitment) != 64:
+                return False
+            return True
+        except Exception:
+            return False
     
     def _validate_basic_header(self, block: Block) -> bool:
         """

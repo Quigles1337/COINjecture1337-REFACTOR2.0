@@ -11,4 +11,21 @@ __license__ = "MIT"
 # Import CLI for easy access
 from .cli import COINjectureCLI, main
 
-__all__ = ['COINjectureCLI', 'main']
+# Import metrics engine for architecture compliance
+from .metrics_engine import (
+    MetricsEngine,
+    ComputationalComplexity,
+    NetworkState,
+    SATOSHI_CONSTANT,
+    get_metrics_engine
+)
+
+__all__ = [
+    'COINjectureCLI', 
+    'main',
+    'MetricsEngine',
+    'ComputationalComplexity', 
+    'NetworkState',
+    'SATOSHI_CONSTANT',
+    'get_metrics_engine'
+]

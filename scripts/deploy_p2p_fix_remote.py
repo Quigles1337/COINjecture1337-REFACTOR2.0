@@ -305,9 +305,9 @@ if __name__ == "__main__":
         f.write(enhanced_p2p_code)
     
     # Deploy to consensus directory
-    subprocess.run(['sudo', 'cp', '/tmp/enhanced_p2p_discovery.py', '/opt/coinjecture-consensus/enhanced_p2p_discovery.py'])
-    subprocess.run(['sudo', 'chown', 'coinjecture:coinjecture', '/opt/coinjecture-consensus/enhanced_p2p_discovery.py'])
-    subprocess.run(['sudo', 'chmod', '+x', '/opt/coinjecture-consensus/enhanced_p2p_discovery.py'])
+    subprocess.run(['sudo', 'cp', '/tmp/enhanced_p2p_discovery.py', '/opt/coinjecture/enhanced_p2p_discovery.py'])
+    subprocess.run(['sudo', 'chown', 'coinjecture:coinjecture', '/opt/coinjecture/enhanced_p2p_discovery.py'])
+    subprocess.run(['sudo', 'chmod', '+x', '/opt/coinjecture/enhanced_p2p_discovery.py'])
     print("✅ Enhanced P2P Discovery Service deployed")
     
     # Step 3: Deploy enhanced signature validation

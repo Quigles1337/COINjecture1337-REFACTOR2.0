@@ -17,8 +17,8 @@ aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy file://bucket-polic
 echo "Apply CORS"
 aws s3api put-bucket-cors --bucket "$BUCKET_NAME" --cors-configuration file://cors.json
 
-echo "Sync web/ to bucket"
-aws s3 sync web/ s3://"$BUCKET_NAME"/ --delete
+echo "Sync current directory to bucket"
+aws s3 sync . s3://"$BUCKET_NAME"/ --delete
 
 echo "Invalidating CloudFront cache to serve latest version"
 aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths "/*"

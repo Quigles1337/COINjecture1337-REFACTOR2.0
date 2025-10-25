@@ -88,7 +88,7 @@ def migrate_all_rewards():
     print("🚀 Starting migration to dynamic tokenomics...")
     
     # Load blockchain state
-    blockchain_path = '/opt/coinjecture-consensus/data/blockchain_state.json'
+    blockchain_path = '/opt/coinjecture/data/blockchain_state.json'
     if not os.path.exists(blockchain_path):
         print(f"❌ Blockchain state file not found: {blockchain_path}")
         return False
@@ -102,7 +102,7 @@ def migrate_all_rewards():
     tokenomics = DynamicWorkScoreTokenomics()
     
     # Connect to rewards database
-    db_path = '/opt/coinjecture-consensus/data/faucet_ingest.db'
+    db_path = '/opt/coinjecture/data/faucet_ingest.db'
     if not os.path.exists(db_path):
         print(f"❌ Database file not found: {db_path}")
         return False

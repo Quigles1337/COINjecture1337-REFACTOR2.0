@@ -9,11 +9,11 @@ echo "=== Deploying Memory-Efficient Consensus Fix ==="
 
 # Deploy memory optimization script
 echo "Deploying memory optimization script..."
-scp -i ~/.ssh/coinjecture_droplet_key scripts/optimize_consensus_memory.py root@167.172.213.70:/opt/coinjecture-consensus/
+scp -i ~/.ssh/coinjecture_droplet_key scripts/optimize_consensus_memory.py root@167.172.213.70:/opt/coinjecture/
 
 # Deploy memory-efficient consensus fix
 echo "Deploying memory-efficient consensus fix..."
-scp -i ~/.ssh/coinjecture_droplet_key scripts/memory_efficient_consensus_fix.py root@167.172.213.70:/opt/coinjecture-consensus/
+scp -i ~/.ssh/coinjecture_droplet_key scripts/memory_efficient_consensus_fix.py root@167.172.213.70:/opt/coinjecture/
 
 # Deploy to droplet
 echo "Deploying to droplet..."
@@ -26,7 +26,7 @@ systemctl stop coinjecture-consensus
 
 # Apply memory optimizations
 echo "Applying memory optimizations..."
-cd /opt/coinjecture-consensus
+cd /opt/coinjecture
 chmod +x optimize_consensus_memory.py
 python3 optimize_consensus_memory.py
 

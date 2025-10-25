@@ -466,11 +466,11 @@ if __name__ == "__main__":
 '''
         
         # Write enhanced consensus service
-        with open('/opt/coinjecture-consensus/p2p_consensus_service.py', 'w') as f:
+        with open('/opt/coinjecture/p2p_consensus_service.py', 'w') as f:
             f.write(enhanced_consensus)
         
         # Make it executable
-        os.chmod('/opt/coinjecture-consensus/p2p_consensus_service.py', 0o755)
+        os.chmod('/opt/coinjecture/p2p_consensus_service.py', 0o755)
         
         # Update systemd service to use P2P consensus service
         systemd_service = '''[Unit]
@@ -480,8 +480,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/coinjecture-consensus
-ExecStart=/opt/coinjecture-consensus/.venv/bin/python3 p2p_consensus_service.py
+WorkingDirectory=/opt/coinjecture
+ExecStart=/opt/coinjecture/.venv/bin/python3 p2p_consensus_service.py
 Restart=always
 RestartSec=5
 StandardOutput=journal

@@ -314,9 +314,9 @@ if __name__ == "__main__":
 EOF
 
 # Deploy the fixed consensus service
-sudo cp /tmp/consensus_service_fixed.py /opt/coinjecture-consensus/consensus_service_fixed.py
-sudo chown coinjecture:coinjecture /opt/coinjecture-consensus/consensus_service_fixed.py
-sudo chmod +x /opt/coinjecture-consensus/consensus_service_fixed.py
+sudo cp /tmp/consensus_service_fixed.py /opt/coinjecture/consensus_service_fixed.py
+sudo chown coinjecture:coinjecture /opt/coinjecture/consensus_service_fixed.py
+sudo chmod +x /opt/coinjecture/consensus_service_fixed.py
 
 echo "✅ Fixed consensus service deployed"
 
@@ -334,8 +334,8 @@ After=network.target
 Type=simple
 User=coinjecture
 Group=coinjecture
-WorkingDirectory=/opt/coinjecture-consensus
-ExecStart=/opt/coinjecture-consensus/.venv/bin/python3 consensus_service_fixed.py
+WorkingDirectory=/opt/coinjecture
+ExecStart=/opt/coinjecture/.venv/bin/python3 consensus_service_fixed.py
 Restart=always
 RestartSec=5
 
