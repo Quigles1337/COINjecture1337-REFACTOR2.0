@@ -2,7 +2,7 @@
 
 ## **macOS - Ready to Download!**
 
-### **[COINjecture-macOS-v3.6.5-Final.zip](COINjecture-macOS-v3.6.5-Final.zip)** (39.2 MB)
+### **[COINjecture-macOS-v3.13.14-Final.zip](COINjecture-macOS-v3.13.14-Final.zip)** (45.8 MB)
 
 **✨ Features:**
 - ✅ **Zero Security Warnings**: Comprehensive security bypass
@@ -12,6 +12,9 @@
 - ✅ **Network Integration**: Live COINjecture blockchain connectivity
 - ✅ **Desktop Integration**: Desktop shortcuts and Applications folder
 - ✅ **Complete Mining**: Full complexity data capture and work metrics
+- ✅ **NEW: Dynamic Gas Calculation**: IPFS-based gas costs (38K-600K+ gas range)
+- ✅ **NEW: Real-time Mining**: Varied gas costs based on computational complexity
+- ✅ **NEW: Enhanced CLI**: Updated commands with gas calculation integration
 
 **🚀 Quick Start:**
 1. **Download** the zip file above
@@ -42,12 +45,14 @@
 
 ## **Technical Details**
 
-- **Version**: 3.6.5
+- **Version**: 3.13.14
 - **Build**: PyInstaller with optimized dependencies
-- **Network**: Connects to `http://167.172.213.70:5000`
+- **Network**: Connects to `http://167.172.213.70:12346`
 - **Mining**: Complete ComputationalComplexity object with all work data
-- **IPFS**: Integrated proof bundle storage
+- **IPFS**: Integrated proof bundle storage with dynamic gas calculation
 - **Wallets**: Cryptographic wallet system with Ed25519 signatures
+- **Gas System**: Dynamic IPFS-based gas calculation (38K-600K+ gas range)
+- **API**: Enhanced API endpoints with gas calculation integration
 
 ## **🎯 Ready to Mine!**
 

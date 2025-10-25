@@ -36,6 +36,8 @@ class COINjectureCLI:
         self.bootstrap_peers = ["167.172.213.70:12345"]
         # IPFS API endpoint (configurable via env)
         self.ipfs_api_url = os.environ.get("IPFS_API_URL", "http://localhost:5001")
+        # Faucet API endpoint (configurable via env)
+        self.faucet_api_url = os.environ.get("API_URL", "http://167.172.213.70:12346")
         self.ipfs_available = False
         self.offline_queue_file = "offline_queue.json"
         self.telemetry_enabled = True  # Enable telemetry by default
@@ -517,8 +519,8 @@ Examples:
         enable_parser.add_argument(
             '--faucet-url',
             type=str,
-            default='https://api.coinjecture.com',
-            help='Faucet API URL (default: https://api.coinjecture.com)'
+            default='f"{self.faucet_api_url}"',
+            help='Faucet API URL (default: f"{self.faucet_api_url}")'
         )
         enable_parser.add_argument(
             '--secret',
@@ -592,8 +594,8 @@ Examples:
         parser.add_argument(
             '--api-url',
             type=str,
-            default='https://api.coinjecture.com',
-            help='API URL for balance query (default: https://api.coinjecture.com)'
+            default='f"{self.faucet_api_url}"',
+            help='API URL for balance query (default: f"{self.faucet_api_url}")'
         )
         parser.set_defaults(func=self._handle_wallet_balance)
     
@@ -954,7 +956,7 @@ Examples:
             # Submit to network API
             try:
                 import requests
-                response = requests.post("https://api.coinjecture.com/v1/ingest/block", 
+                response = requests.post(f"{self.faucet_api_url}/v1/ingest/block", 
                                        json=block_data, timeout=10)
                 if response.status_code in [200, 202]:
                     print(f"✅ Block submitted to network: {response.status_code}")
@@ -974,7 +976,7 @@ Examples:
     def _get_current_blockchain_index(self) -> int:
         """Get the current blockchain index from the network."""
         try:
-            response = requests.get("https://api.coinjecture.com/v1/data/block/latest", timeout=5)
+            response = requests.get(f"{self.faucet_api_url}/v1/data/block/latest", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('status') == 'success':
@@ -987,7 +989,7 @@ Examples:
     def _get_latest_block_hash(self) -> str:
         """Get the latest block hash from the network."""
         try:
-            response = requests.get("https://api.coinjecture.com/v1/data/block/latest", timeout=5)
+            response = requests.get(f"{self.faucet_api_url}/v1/data/block/latest", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('status') == 'success':
@@ -1867,7 +1869,7 @@ Examples:
     
     def _enable_telemetry_interactive(self):
         """Interactive telemetry enable."""
-        faucet_url = input("Faucet API URL (default: https://api.coinjecture.com): ").strip() or "https://api.coinjecture.com"
+        faucet_url = input(f"Faucet API URL (default: {self.faucet_api_url}): ").strip() or self.faucet_api_url
         secret = input("HMAC secret (default: dev-secret): ").strip() or "dev-secret"
         
         args = type('Args', (), {
@@ -2166,7 +2168,7 @@ Examples:
                 
                 # Also try API for comparison (if available)
                 try:
-                    response = requests.get(f"{args.api_url}/v1/wallet/{wallet.address}/balance", timeout=5)
+                    response = requests.get(f"{self.faucet_api_url}/v1/wallet/{wallet.address}/balance", timeout=5)
                     if response.status_code == 200:
                         data = response.json()
                         api_balance = data.get('balance', 0)
@@ -2380,7 +2382,7 @@ Examples:
                 return 1
             
             # Query rewards API
-            response = requests.get(f"https://api.coinjecture.com/v1/rewards/{miner_address}", timeout=10)
+            response = requests.get(f"{self.faucet_api_url}/v1/rewards/{miner_address}", timeout=10)
             
             if response.status_code == 200:
                 data = response.json()['data']
@@ -2390,12 +2392,15 @@ Examples:
                 print(f"   Total Work Score: {data['total_work_score']}")
                 print(f"   Average Work Score: {data['average_work_score']}")
                 
-                if data['rewards_breakdown']:
-                    print(f"\n📊 Rewards Breakdown:")
-                    for reward in data['rewards_breakdown'][:5]:  # Show last 5 blocks
-                        print(f"   Block #{reward['block_index']}: {reward['total_reward']} COIN")
-                        print(f"     Base: {reward['base_reward']} COIN, Work Bonus: {reward['work_bonus']} COIN")
-                        print(f"     Work Score: {reward['work_score']}, Hash: {reward['block_hash'][:16]}...")
+                # Show additional details if available
+                if data.get('blocks_mined', 0) > 0:
+                    print(f"\n📊 Mining Summary:")
+                    print(f"   Average Reward per Block: {data.get('avg_reward', 0.0):.6f} COIN")
+                    print(f"   Total Blocks Mined: {data.get('total_blocks', 0)}")
+                    print(f"   Average Work Score: {data.get('average_work_score', 0.0):.2f}")
+                else:
+                    print(f"\n💡 Start mining to earn rewards!")
+                    print(f"   Use: python3 src/cli.py mine --config ./config.json")
                 
                 return 0
             else:
@@ -2413,23 +2418,21 @@ Examples:
             import requests
             
             # Query leaderboard API
-            response = requests.get("https://api.coinjecture.com/v1/rewards/leaderboard", timeout=10)
+            response = requests.get(f"{self.faucet_api_url}/v1/rewards/leaderboard", timeout=10)
             
             if response.status_code == 200:
                 data = response.json()['data']
                 print(f"🏆 Mining Leaderboard")
-                print(f"   Total Miners: {data['total_miners']}")
-                print(f"   Total Blocks: {data['total_blocks']}")
-                print(f"   Total Rewards Distributed: {data['total_rewards_distributed']} COIN")
+                print(f"   Address: {data.get('address', 'N/A')}")
+                print(f"   Total Rewards: {data.get('total_rewards', 0.0)} COIN")
+                print(f"   Blocks Mined: {data.get('blocks_mined', 0)}")
+                print(f"   Total Work Score: {data.get('total_work_score', 0.0)}")
+                print(f"   Average Work Score: {data.get('average_work_score', 0.0)}")
                 
-                if data['leaderboard']:
-                    print(f"\n📈 Top Miners:")
-                    for i, miner in enumerate(data['leaderboard'][:10], 1):
-                        print(f"   #{i} {miner['address'][:16]}...")
-                        print(f"      Rewards: {miner['total_rewards']} COIN")
-                        print(f"      Blocks: {miner['blocks_mined']}")
-                        print(f"      Work Score: {miner['total_work_score']}")
-                        print(f"      Avg Work Score: {miner['average_work_score']}")
+                # Note: The current API doesn't provide a full leaderboard
+                # This is a placeholder for future leaderboard functionality
+                print(f"\n💡 Leaderboard functionality coming soon!")
+                print(f"   Current API provides individual miner stats")
                 
                 return 0
             else:

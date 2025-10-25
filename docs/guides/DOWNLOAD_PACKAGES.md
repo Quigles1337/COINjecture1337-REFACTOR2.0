@@ -4,13 +4,15 @@ This document describes the different ways to download and install COINjecture f
 
 ## 🌐 Live Server Status
 
-**COINjecture is now LIVE and operational!**
+**COINjecture v3.13.14 is now LIVE with Dynamic Gas Calculation!**
 
-- **🌍 Live API Server:** http://167.172.213.70:5000
-- **✅ Health Check:** http://167.172.213.70:5000/health
-- **📊 Latest Block:** http://167.172.213.70:5000/v1/data/block/latest
+- **🌍 Live API Server:** http://167.172.213.70:12346
+- **✅ Health Check:** http://167.172.213.70:12346/health
+- **📊 Latest Block:** http://167.172.213.70:12346/v1/data/block/latest
 - **🔗 Public Access:** Available to anyone worldwide
 - **📡 Telemetry Ready:** CLI can connect and send data
+- **⛽ Dynamic Gas:** IPFS-based gas calculation (38K-600K+ gas range)
+- **🎯 Real Mining:** Live blockchain with varied gas costs
 
 ## 🚀 Quick Start Options
 
@@ -18,9 +20,9 @@ This document describes the different ways to download and install COINjecture f
 **For:** All platforms, zero technical setup required
 
 **Download and run:**
-- **macOS**: `COINjecture-3.6.0-macOS.dmg` - Double-click to install
-- **Windows**: `COINjecture-3.6.0-Windows-Installer.exe` - Run installer
-- **Linux**: `COINjecture-3.6.0-Linux.AppImage` - Make executable and run
+- **macOS**: `COINjecture-3.13.14-macOS.dmg` - Double-click to install
+- **Windows**: `COINjecture-3.13.14-Windows-Installer.exe` - Run installer
+- **Linux**: `COINjecture-3.13.14-Linux.AppImage` - Make executable and run
 
 **Features:**
 - ✅ No Python installation required
@@ -28,6 +30,9 @@ This document describes the different ways to download and install COINjecture f
 - ✅ Direct CLI access for advanced users
 - ✅ Automatic wallet and mining setup
 - ✅ Live network integration
+- ✅ **NEW: Dynamic Gas Calculation** - IPFS-based gas costs (38K-600K+ gas)
+- ✅ **NEW: Real-time Mining** - Varied gas costs based on computational complexity
+- ✅ **NEW: Enhanced CLI** - Updated commands with gas calculation integration
 
 ### Option 2: One-Click Installer (For Developers)
 **For:** All platforms, Python-based installation
