@@ -1,0 +1,827 @@
+# COINjecture System Architecture
+
+## Overview
+
+COINjecture is a utility-based blockchain that proves computational work was done through NP-Complete problem solving. Built on Satoshi Nakamoto's foundational insights about proof-of-work consensus and immutable ledgers, COINjecture evolves these concepts with verifiable computational complexity and practical utility.
+
+### Core Architectural Principles
+
+1. **Verifiable Work**: NP-Complete problems provide O(2^n) solve complexity with O(n) verification
+2. **Emergent Tokenomics**: Supply, deflation, and block time emerge from measured network behavior
+3. **Utility-Based Design**: Consensus layer + optional user-submitted computational work markets
+4. **Distributed Participation**: Competition within hardware classes, not across them
+
+For the vision and principles, see [MANIFESTO.md](MANIFESTO.md).
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    User Submissions Layer                    │
+│  (Users submit problems, set bounties, choose aggregation)  │
+└────────────────────────┬────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Problem Pool & Aggregation Engine               │
+│     (Manages submissions, tracks solutions, aggregates)     │
+└────────────────────────┬────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Solver Selection (Tier-based)                   │
+│  (Hardware profile → optimal tier → profitability estimate)  │
+└────────────────────────┬────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────────┐
+│              PoW Engine (NP-Complete Solving)                │
+│    (Generate problem → solve → measure complexity metrics)   │
+└────────────────────────┬────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────────┐
+│                 Commit-Reveal Protocol                       │
+│  (Create commitment → mine header → reveal solution bundle)  │
+└────────────────────────┬────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Consensus Layer                           │
+│   (Validate headers → verify reveals → fork choice → tip)    │
+└────────────────────────┬────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Block Creation & Storage                        │
+│     (Persist blocks → index commitments → IPFS bundles)     │
+└────────────────────────┬────────────────────────────────────┘
+                         ↓
+┌─────────────────────────────────────────────────────────────┐
+│         Tokenomics Engine (Work Score → Rewards)             │
+│  (Calculate work score → determine reward → update supply)   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Core Modules
+
+### 3.1 Core Module
+**Reference**: [docs/blockchain/core.md](docs/blockchain/core.md)
+
+**Responsibilities**:
+- Define canonical on-chain structures: `BlockHeader`, `Block`, `CommitmentLeaf`
+- Deterministic hashing and serialization
+- Merkle tree construction and proof verification
+
+**Key Structures**:
+- `BlockHeader`: version, parent_hash, height, timestamp, commitments_root, tx_root, difficulty_target, cumulative_work, miner_pubkey, commit_nonce, problem_type, tier, commit_epoch, proof_commitment, header_hash
+- `CommitmentLeaf`: 64-byte structure binding problem params and solution claims
+- `Block`: header + optional transaction data
+
+### 3.2 Consensus Module
+**Reference**: [docs/blockchain/consensus.md](docs/blockchain/consensus.md)
+
+**Responsibilities**:
+- Validate headers and reveals
+- Maintain block tree and choose best tip by cumulative work
+- Build deterministic genesis
+
+**Validation Pipeline**:
+1. Basic checks: version, timestamp, parent linkage
+2. Commitment presence: proof_commitment non-zero, commitments_root valid
+3. Difficulty: estimated_work(header) >= current_target
+4. Fork-choice: insert node, compute cumulative_work, select tip
+
+**Fork Choice**: `tip = argmax(cumulative_work)` with tie-breaker on earliest receipt time
+
+### 3.3 PoW Module
+**Reference**: [docs/blockchain/pow.md](docs/blockchain/pow.md)
+
+**Responsibilities**:
+- ProblemRegistry: register/generate/solve/verify problems
+- Commit-reveal helpers and salt derivation
+- Work score calculation and difficulty mapping
+
+**Problem Registry Interface**:
+- `generate(problem_type, seed, tier) -> problem:dict`
+- `solve(problem) -> solution:any`
+- `verify(problem, solution) -> bool`
+- `build_complexity(problem, solution, metrics) -> ComputationalComplexity`
+
+**Problem Type Categories**:
+- **Optimization Problems**: Knapsack, TSP, Bin Packing, Job Scheduling
+- **Decision Problems**: SAT, Graph Coloring, Clique, Vertex Cover
+- **Search Problems**: Subset Sum, Hamiltonian Path, Set Cover
+- **Number Theory**: Factorization, Lattice Problems
+- **Graph Theory**: Graph Coloring, Clique, Vertex Cover, Hamiltonian Path
+
+**Supported Problems**:
+
+**Production Ready**:
+- `subset_sum`: Exact DP solver, NP-Complete, O(2^n) solve, O(n) verify
+
+**In Development**:
+- `knapsack`: 0/1 Knapsack problem, NP-Complete, O(2^n) solve, O(n) verify
+- `graph_coloring`: Graph k-coloring, NP-Complete, exponential solve, O(n) verify
+- `sat`: Boolean satisfiability, NP-Complete, exponential solve, O(n) verify
+- `tsp`: Traveling Salesman Problem, NP-Complete, O(n!) solve, O(n) verify
+
+**Scaffold/Research**:
+- `factorization`: Integer factorization, NP-Hard, subexponential solve, O(1) verify
+- `lattice`: Lattice-based problems, NP-Hard, exponential solve, polynomial verify
+- `clique`: Maximum clique, NP-Complete, exponential solve, O(n²) verify
+- `vertex_cover`: Minimum vertex cover, NP-Complete, exponential solve, O(n) verify
+- `hamiltonian_path`: Hamiltonian path, NP-Complete, O(n!) solve, O(n) verify
+- `set_cover`: Set cover problem, NP-Complete, exponential solve, O(n) verify
+- `bin_packing`: Bin packing, NP-Hard, exponential solve, O(n) verify
+- `job_scheduling`: Job shop scheduling, NP-Hard, exponential solve, O(n) verify
+
+**Work Score Formula**:
+```
+work_score = 
+    time_asymmetry * 
+    sqrt(space_asymmetry) * 
+    problem_weight * 
+    size_factor * 
+    quality_score * 
+    energy_efficiency
+```
+
+### 3.3.6 Satoshi Constant - Critical Complex Equilibrium
+
+**Mathematical Foundation**:
+
+The Satoshi Constant (η = λ = √2/2 ≈ 0.7071) is derived from eigenvalue analysis for critical damping in the consensus mechanism.
+
+**Eigenvalue Proof**:
+
+Step 1: Define the complex eigenvalue:
+```
+μ = -η + iλ
+```
+where η > 0 (damping, real part magnitude) and λ ≥ 0 (oscillation, imaginary part).
+
+Step 2: Unit magnitude constraint for bounded dynamics:
+```
+|μ|² = η² + λ² = 1  (Equation 1)
+```
+
+Step 3: Balance condition for critical equilibrium:
+```
+η = λ  (Equation 2)
+```
+
+Step 4: Solve the system by substituting (2) into (1):
+```
+η² + η² = 1
+2η² = 1
+η² = 1/2
+η = √2/2 ≈ 0.7071  (η > 0)
+```
+
+Thus: λ = √2/2
+
+Step 5: Verification:
+```
+μ = -√2/2 + i√2/2
+|μ| = √((√2/2)² + (√2/2)²) = √(1/2 + 1/2) = 1 ✓
+```
+
+**Properties**:
+- **Stability Metric**: |μ| = 1 (unit magnitude ensures bounded oscillations)
+- **Fork Resistance**: 1 - η ≈ 0.293 (29.3% resistance to forks)
+- **Liveness Guarantee**: η ≈ 0.707 (70.7% liveness guarantee)
+- **Nash Equilibrium**: Optimal balance between damping and oscillation
+
+**Implementation**:
+```python
+SATOSHI_CONSTANT = math.sqrt(2) / 2  # 0.707107...
+
+# Applied in:
+- Work score calculation (damping factor)
+- Reward calculation (stability multiplier)
+- Consensus validation (equilibrium check)
+- Network state (damping_ratio and coupling_strength)
+```
+
+**Consensus Integration**:
+The Satoshi Constant ensures the consensus mechanism operates at critical damping, providing:
+1. **Convergence**: System converges to consensus without overshooting
+2. **Stability**: Bounded oscillations prevent chaotic behavior
+3. **Efficiency**: Optimal balance between speed and stability
+4. **Security**: Fork resistance through equilibrium maintenance
+
+### 3.3.7 Metrics Engine Module
+
+**Responsibilities**:
+- Calculate work scores from computational complexity metrics
+- Calculate gas costs for operations based on complexity
+- Calculate block rewards using dynamic tokenomics formula
+- Maintain network state for reward calculations
+- Provide deflation factor calculations
+
+**Key Functions**:
+```python
+calculate_work_score(complexity: ComputationalComplexity) -> float
+    # Formula: time_asymmetry * sqrt(space_asymmetry) * 
+    #          problem_weight * size_factor * quality_score * energy_efficiency
+
+calculate_gas_cost(operation_type: str, complexity: ComputationalComplexity) -> int
+    # Base gas costs:
+    # - block_validation: 1000
+    # - transaction_processing: 500
+    # - proof_verification: 2000
+    # - commitment_verification: 1500
+    # - merkle_proof: 300
+
+calculate_block_reward(work_score: float, network_state: NetworkState) -> float
+    # Formula: reward = log(1 + work_score/network_avg) * deflation_factor
+    # deflation_factor = 1 / (2^(log2(cumulative_work)/10))
+```
+
+**Gas Calculation**:
+
+Gas represents the computational cost of operations on the blockchain. Unlike Ethereum's static gas costs, COINjecture's gas is dynamically calculated based on actual computational complexity derived from IPFS data.
+
+**Dynamic Gas Calculation Process**:
+
+1. **IPFS Data Retrieval**: System attempts to fetch real problem/solution data from IPFS using CID
+2. **Fallback Generation**: If IPFS data unavailable, generates realistic data based on CID hash
+3. **Complexity Metrics**: Calculates time_asymmetry, space_asymmetry, and problem_weight
+4. **Gas Scaling**: Applies complexity multiplier to base gas costs
+
+**Gas Formula**:
+```
+gas_cost = base_gas * (1 + complexity_multiplier)
+
+where:
+  complexity_multiplier = time_asymmetry * sqrt(space_asymmetry) * problem_weight
+```
+
+**IPFS Data Structure**:
+```json
+{
+  "problem_data": {
+    "size": 15,           // Problem size (10-30)
+    "difficulty": 2.5,    // Difficulty level (1.0-3.0)
+    "type": "subset_sum", // Problem type
+    "constraints": 3       // Number of constraints
+  },
+  "solution_data": {
+    "solve_time": 8.5,    // Time to solve (1.0-11.0s)
+    "verify_time": 0.3,   // Time to verify (0.1-0.6s)
+    "memory_used": 250,   // Memory consumption
+    "energy_used": 2.1,   // Energy consumption
+    "quality": 0.85,      // Solution quality (0.7-1.0)
+    "algorithm": "dynamic_programming"
+  }
+}
+```
+
+**Base Gas Costs**:
+- Block validation: 1000 gas
+- Transaction processing: 500 gas
+- Proof verification: 2000 gas
+- Commitment verification: 1500 gas
+- Merkle proof: 300 gas
+- Mining operations: 1000 gas (base)
+
+**Gas Range Examples**:
+- **Simple problems**: ~38,000-110,000 gas
+- **Medium problems**: ~200,000-400,000 gas
+- **Complex problems**: ~500,000-600,000 gas
+- **Very complex**: 1,000,000+ gas
+
+**Gas Limits**:
+- Block gas limit: 1,000,000 gas
+- Transaction gas limit: 100,000 gas
+- Gas price: 0.000001 BEANS per gas unit (dynamic)
+
+**Anti-Grinding & Commitment Binding**:
+- `epoch_salt = H(parent_hash || round(timestamp/epoch))`
+- `solution_hash = H(solution)`
+- `commitment = H(encode(problem_params) || miner_salt || epoch_salt || solution_hash)`
+
+**Security Properties**:
+1. **Binding**: Commitment cryptographically binds to solution via H(solution)
+2. **Hiding**: Hash reveals nothing about actual solution structure
+3. **Anti-grinding**: Epoch salt prevents pre-mining many problems
+
+### 3.4 Network Module
+**Reference**: [docs/blockchain/network.md](docs/blockchain/network.md)
+
+**Responsibilities**:
+- libp2p host wrapper
+- Gossipsub topics for headers, reveals, requests/responses
+- RPC for sync and proof fetch
+
+**Gossipsub Topics**:
+- `/coinj/headers/1.0.0`: Announce new headers
+- `/coinj/commit-reveal/1.0.0`: Reveal bundles and CIDs
+- `/coinj/requests/1.0.0`: Fetch requests
+- `/coinj/responses/1.0.0`: Fetch responses
+
+**RPC Methods**:
+- `get_headers(start_height, count) -> [headers]`
+- `get_block_by_hash(hash) -> header or full block`
+- `get_proof_by_cid(cid) -> bundle bytes`
+
+### 3.5 Storage Module
+**Reference**: [docs/blockchain/storage.md](docs/blockchain/storage.md)
+
+**Responsibilities**:
+- Local persistent store for headers/blocks/indices
+- IPFS client integration for proof bundles
+- Pruning strategies per node role
+
+**Database Schema**:
+- `headers`: key=header_hash → header_bytes
+- `blocks`: key=block_hash → block_bytes
+- `tips`: single key → set of tip hashes
+- `work_index`: key=height → cumulative_work
+- `commit_index`: key=commitment → cid
+- `peer_index`: key=peer_id → metadata
+
+**Pruning Modes**:
+- **light**: Headers + commit_index only
+- **full**: Recent N epochs of bundles
+- **archive**: All data, pinned bundles
+
+### 3.6 Node Module
+**Reference**: [docs/blockchain/node.md](docs/blockchain/node.md)
+
+**Responsibilities**:
+- Node configuration and role selection
+- Compose services: networking, consensus, storage, pow engine
+- Lifecycle management
+
+**Node Roles**:
+- **light**: Subscribe headers, validate commitments, request bundles on demand
+- **full**: Validate headers + reveals, selective bundle fetch, fork choice
+- **miner**: Run commit-reveal loop, publish headers and reveals
+- **archive**: Validate and pin all bundles, serve data to peers
+
+### 3.7 CLI Module
+**Reference**: [docs/blockchain/cli.md](docs/blockchain/cli.md)
+
+**Responsibilities**:
+- User-facing commands for node management and chain interaction
+
+**Key Commands**:
+- `coinjectured init --role [light|full|miner|archive]`
+- `coinjectured run --config PATH`
+- `coinjectured mine --problem-type subset_sum --tier desktop`
+- `coinjectured get-block --hash HEX`
+- `coinjectured get-proof --cid CID`
+
+## Utility Layer
+
+### 4.1 User Submissions System
+**Reference**: [src/user_submissions/](src/user_submissions/) directory
+
+**Components**:
+- `ProblemSubmission`: User-submitted problem with bounty and aggregation strategy
+- `SolutionRecord`: Individual solution with quality, work score, energy metrics
+- `ProblemPool`: Manages pending problems and solution collection
+- `AggregationStrategy`: ANY, BEST, MULTIPLE, STATISTICAL
+
+**Aggregation Strategies**:
+- **ANY**: First valid solution wins (urgent problems)
+- **BEST**: Highest quality solution wins (quality matters)
+- **MULTIPLE**: Collect multiple diverse solutions (multiple approaches)
+- **STATISTICAL**: Collect statistical sample (research problems)
+
+### 4.2 Tokenomics Engine
+**Reference**: [DYNAMIC_TOKENOMICS.README.md](DYNAMIC_TOKENOMICS.README.md), [API.README.md](API.README.md)
+
+**Core Functions**:
+- `calculate_work_score(complexity_metrics)`: Measure computational work
+- `calculate_block_reward(work_score, network_state)`: Determine reward
+- `get_deflation_factor(cumulative_work)`: Natural deflation
+- `select_optimal_tier(hardware_profile)`: Market-driven tier selection
+
+**Reward Formula**:
+```
+reward = log(1 + work_score/network_avg) * deflation_factor
+
+where:
+  deflation_factor = 1 / (2^(log2(cumulative_work)/10))
+```
+
+## Data Flow
+
+### 5.1 Problem Submission Flow
+```
+User
+  ↓ submit_problem(problem_spec, bounty, aggregation_strategy)
+ProblemPool
+  ↓ add_submission(submission_id, submission)
+Storage
+  ↓ get_eligible_problems(solver_tier)
+Solver
+```
+
+### 5.2 Block Creation Flow
+```
+Solver
+  ↓ select_optimal_tier(hardware_profile)
+Tier Selection
+  ↓ generate_problem(seed, tier)
+PoW Engine
+  ↓ solve(problem)
+Solution
+  ↓ measure_complexity(solve_time, verify_time, energy)
+Complexity Metrics
+  ↓ create_commitment(problem_params, salt)
+Commitment
+  ↓ mine_header(commitment, difficulty_target)
+Header
+  ↓ reveal(solution_bundle)
+Reveal
+  ↓ verify(problem, solution)
+Verification
+  ↓ calculate_work_score(complexity)
+Work Score
+  ↓ calculate_reward(work_score, network_state)
+Reward
+  ↓ record_block(block, complexity, reward)
+Blockchain State
+```
+
+### 5.3 Consensus Flow
+```
+Header Gossip
+  ↓ receive_header(header_msg)
+Header Validation
+  ↓ validate_header(version, timestamp, parent, commitment)
+Basic Checks
+  ↓ check_difficulty(estimated_work >= target)
+Difficulty Check
+  ↓ fork_choice(cumulative_work)
+Tip Selection
+  ↓ receive_reveal(bundle_cid)
+Reveal Reception
+  ↓ verify_commitment(params, salt, commitment)
+Commitment Verification
+  ↓ verify_solution(problem, solution)
+Solution Verification
+  ↓ accept_block(header, bundle)
+Block Acceptance
+  ↓ update_state(cumulative_work, indices)
+State Update
+```
+
+## Tier System
+
+### 6.1 Hardware Compatibility Categories
+
+| Tier | Name | Problem Size | Target Hardware | Characteristics |
+|------|------|--------------|-----------------|-----------------|
+| 1 | Mobile | 8-12 elements | Smartphones, tablets, IoT | Energy efficient, fast iteration |
+| 2 | Desktop | 12-16 elements | Laptops, basic desktops | Balanced performance |
+| 3 | Workstation | 16-20 elements | Gaming PCs, dev machines | Higher compute power |
+| 4 | Server | 20-24 elements | Dedicated servers, cloud | Massive parallel processing |
+| 5 | Cluster | 24-32 elements | Multi-node, supercomputers | Distributed computation |
+
+### 6.2 Tier Selection
+
+**Process**:
+1. Hardware profile assessment (computational_capability, energy_efficiency)
+2. Tier metrics retrieval (avg_work_score, avg_solve_time, market_share)
+3. Profitability estimation for each tier
+4. Select tier with highest profitability
+
+**Profitability Formula**:
+```
+profitability = expected_reward / (expected_time * energy_cost)
+
+where:
+  expected_reward = log(1 + expected_work/network_avg) * deflation_factor
+  expected_time = network_avg_time / hardware_capability
+```
+
+**Market Equilibrium**:
+- High profitability tier → more solvers enter → competition increases → work scores normalize
+- Low profitability tier → solvers exit → competition decreases → work scores increase
+- System self-balances across all hardware classes
+
+## Key Architectural Principles
+
+### 7.1 Verifiable Work
+
+**NP-Complete/NP-Hard Problems**:
+- **Subset Sum**: O(2^n) solve, O(n) verify - production ready
+- **Knapsack**: O(2^n) solve, O(n) verify - in development
+- **Graph Coloring**: Exponential solve, O(n) verify - in development
+- **SAT**: Exponential solve, O(n) verify - in development
+- **TSP**: O(n!) solve, O(n) verify - in development
+- **Factorization**: Subexponential solve, O(1) verify - research
+- **Lattice Problems**: Exponential solve, polynomial verify - research
+
+**Key Properties**:
+- Inherent asymmetry (hard to solve, easy to verify)
+- Measured complexity metrics prove actual computational work
+- Diverse problem types enable different optimization strategies
+- Problem registry allows pluggable problem types
+
+**On-Chain Proof**:
+- Commitment binds problem parameters before solving
+- Solution bundle stored on IPFS
+- Verification happens on-chain or via fast probabilistic checks
+
+### 7.2 Emergent Tokenomics
+
+**No Predetermined Schedules**:
+- Supply emerges from cumulative work score
+- Deflation emerges from network growth (each new unit = smaller fraction of total)
+- Block time emerges from verification performance
+- Difficulty adjusts to maintain work score distribution
+
+**Dynamic Adaptation**:
+```
+block_time = median_verify_time * network_propagation * competition_window
+difficulty_adjustment = f(recent_work_scores / historical_work_scores)
+deflation_factor = 1 / (2^(log2(cumulative_work)/10))
+```
+
+### 7.3 Utility-Based Design
+
+**Two Layers**:
+1. **Consensus Layer**: Proof of computational work via NP-Complete problems
+2. **Utility Layer**: User-submitted computational work markets
+
+**Economic Model**:
+- Users submit problems and set bounties
+- Solvers earn block rewards + user bounties
+- Aggregation strategies enable diverse use cases
+- Real economic demand drives real computational supply
+
+### 7.4 Distributed Participation
+
+**Hardware-Class-Relative Competition**:
+- Mobile competes with mobile (on optimization)
+- Server competes with server (on optimization)
+- Work score independent of tier
+- Profitability based on efficiency, not hardware scale
+
+**Algorithm Optimization Economy**:
+- Better algorithms → higher work scores → more rewards
+- Energy efficiency → lower costs → higher profitability
+- Competition rewards innovation, not capital expenditure
+
+## Security Model
+
+### 8.1 Commit-Reveal Protocol
+
+**Purpose**: Prevent grinding attacks where miners generate many problems to find easy ones
+
+**Mechanism**:
+1. **Commit Phase**: Miner creates `commitment = H(problem_params || miner_salt || epoch_salt || H(solution))`
+2. **Mine Phase**: Miner finds header with sufficient work score
+3. **Reveal Phase**: Miner publishes solution bundle, proves commitment matches
+
+**Security Properties**:
+- Epoch salt derived from parent hash (unpredictable)
+- Miner salt must be unique per header
+- Solution hash binding prevents changing solution after mining
+- Commitment cryptographically binds to actual solution (prevents fake reveals)
+
+### 8.2 Fork Choice
+
+**Rule**: `tip = argmax(cumulative_work)` with tie-breaker on earliest receipt time
+
+**Cumulative Work**:
+```
+cumulative_work[block] = cumulative_work[parent] + work_score[block]
+```
+
+**Reorg Protection**:
+- Bounded reorg depth (configurable)
+- Finality depth k (e.g., 20 blocks) for application-level finality
+- Emit events on reorg for application awareness
+
+### 8.3 DOS Protection
+
+**Rate Limiting**:
+- Per-peer quotas on messages
+- Max headers per peer per second
+- Proof size caps
+
+**Validation**:
+- Drop malformed messages
+- Deduplicate by header_hash/commitment
+- Reject oversized payloads
+
+## Implementation Notes
+
+### 9.1 Language-Agnostic Design
+
+**All specifications are implementation-independent**:
+- Fixed-width integers for consensus-critical values
+- Deterministic serialization (canonical field order, explicit endianness)
+- No language-specific types on the wire
+- Cross-language compatibility verified through test vectors
+
+**Consensus-Critical**:
+- Use scaled integers instead of floats where possible
+- Explicit endianness (little-endian for network messages)
+- Deterministic encoding for problem parameters
+
+### 9.2 Testing Strategy
+**Reference**: [docs/testing.md](docs/testing.md)
+
+**Integration Scenarios**:
+- Header-first sync across multiple nodes
+- Commit-reveal success path with bundle retrieval
+- Invalid reveal rejection (mismatched commitment)
+- Reorg handling (longer cumulative-work branch)
+
+**Invariants**:
+- Commitment binding/hiding holds for all accepted blocks
+- Fork-choice picks max cumulative work deterministically
+- Light nodes never accept blocks without valid commitments
+
+### 9.3 Development Environment
+**Reference**: [docs/devnet.md](docs/devnet.md)
+
+**Devnet Setup**:
+- Launch 3-5 nodes with mixed roles (full, miner, light, archive)
+- Temporary data directories for testing
+- Bootstrap peer connections
+- Enable mining on selected nodes
+
+**Operations**:
+- `python scripts/devnet.py up --nodes 4`: Start devnet
+- `python scripts/devnet.py down`: Stop and cleanup
+
+## API Integration
+
+**Reference**: [API.README.md](API.README.md) for complete specifications
+
+### Tokenomics APIs
+- `calculate_work_score(complexity_metrics) -> float`
+- `calculate_block_reward(work_score, network_state) -> float`
+- `get_deflation_factor(cumulative_work) -> float`
+- `select_optimal_tier(hardware_profile, tier_metrics) -> tier_id`
+
+### User Submissions APIs
+- `submit_problem(problem_spec, bounty, aggregation_strategy) -> submission_id`
+- `get_eligible_problems(solver_tier) -> list[submission]`
+- `record_solution(submission_id, solution_record) -> bool`
+- `aggregate_solutions(submission_id, strategy) -> result`
+
+### Network State APIs
+- `get_tier_metrics(tier_id) -> tier_metrics`
+- `get_network_state() -> network_state`
+- `estimate_profitability(hardware_profile, tier_id) -> float`
+
+## Documentation Map
+
+| Document | Purpose |
+|----------|---------|
+| [MANIFESTO.md](MANIFESTO.md) | Vision and principles |
+| [ARCHITECTURE.README.md](ARCHITECTURE.README.md) | This document - system architecture |
+| [API.README.md](API.README.md) | Language-agnostic API specifications |
+| [DYNAMIC_TOKENOMICS.README.md](DYNAMIC_TOKENOMICS.README.md) | Tokenomics system details |
+| [docs/blockchain/core.md](docs/blockchain/core.md) | Core data structures and hashing |
+| [docs/blockchain/consensus.md](docs/blockchain/consensus.md) | Consensus rules and fork choice |
+| [docs/blockchain/pow.md](docs/blockchain/pow.md) | PoW engine and work score |
+| [docs/blockchain/network.md](docs/blockchain/network.md) | Networking and gossip |
+| [docs/blockchain/storage.md](docs/blockchain/storage.md) | Storage and IPFS integration |
+| [docs/blockchain/node.md](docs/blockchain/node.md) | Node roles and configuration |
+| [docs/blockchain/cli.md](docs/blockchain/cli.md) | CLI commands |
+| [src/user_submissions/](src/user_submissions/) | User submission system code |
+| [docs/testing.md](docs/testing.md) | Testing specifications |
+| [docs/devnet.md](docs/devnet.md) | Development environment |
+
+## Getting Started
+
+### Recommended Reading Order
+
+1. **[MANIFESTO.md](MANIFESTO.md)** - Understand the vision and principles
+2. **[ARCHITECTURE.README.md](ARCHITECTURE.README.md)** - Understand the system architecture (this document)
+3. **[API.README.md](API.README.md)** - Understand the interfaces and data flows
+4. **Module-specific READMEs** - Understand implementation details for specific components
+
+### For Different Audiences
+
+**Researchers**:
+- Start with MANIFESTO.md for the conceptual foundation
+- Read blockchain/pow.README.md for complexity theory application
+- Review DYNAMIC_TOKENOMICS.README.md for economic model
+
+**Developers**:
+- Start with ARCHITECTURE.README.md for system overview
+- Read API.README.md for interface specifications
+- Dive into module-specific READMEs for implementation details
+
+**Users**:
+- Start with MANIFESTO.md to understand what COINjecture is
+- Review API.README.md User Submissions section to submit problems
+- Check blockchain/cli.README.md for command-line usage
+
+**Node Operators**:
+- Read blockchain/node.README.md for role selection
+- Review blockchain/storage.README.md for storage requirements
+- Check scripts/devnet.README.md for testing setup
+
+## Module Dependency Map
+
+Based on actual code analysis, here are the real module relationships:
+
+```
+Core Dependencies:
+├── src/core/blockchain.py (foundational)
+│   └── Imports: psutil, hashlib, dataclasses, json, time, os, random, math
+│
+├── src/pow.py
+│   └── Imports: src/core/blockchain (ComputationalComplexity, ProblemTier, etc.)
+│
+├── src/consensus.py
+│   └── Imports: src/core/blockchain, src/pow, src/storage
+│
+├── src/storage.py
+│   └── Imports: src/core/blockchain
+│
+├── src/network.py
+│   └── Imports: src/core/blockchain, src/consensus, src/storage, src/pow
+│
+├── src/node.py
+│   └── Imports: src/core/blockchain, src/pow, src/storage, src/consensus, 
+│                src/network, src/user_submissions/*
+│
+└── src/api/faucet_server.py
+    └── Imports: src/api/* (cache_manager, schema, ingest_store, auth, etc.)
+```
+
+**Key Dependencies**:
+- `src/core/blockchain.py` is the foundational module (no internal dependencies)
+- `src/pow.py` depends only on core blockchain structures
+- `src/consensus.py` orchestrates pow, storage, and blockchain modules
+- `src/network.py` provides P2P communication for consensus
+- `src/node.py` is the main orchestrator that composes all services
+- `src/api/` modules provide external interfaces
+
+**Removed/Consolidated**:
+- `src/consensus_v2.py` (experimental, removed)
+- `consensus_service_p2p.py` (experimental, removed)
+- Various v2 and fix files (temporary, removed)
+
+## Network Configuration
+
+**TestNet Details:**
+- Network ID: `coinjecture-mainnet-v1` (maintains genesis compatibility)
+- Genesis Block: `d1700c2681b75c1d22ed08285994c202d310ff25cf40851365ca6fea22011358`
+- Bootstrap Node: `167.172.213.70:5000`
+- Current Peers: 16 connected (max 20)
+- Consensus: Proof of Computational Work (NP-Complete problems)
+- Tokenomics: Emergent (no fixed supply, gentle deflation)
+
+## Deployment Architecture
+
+### Single Source of Truth Principle
+
+**Database Location**: `/opt/coinjecture/data/blockchain.db`
+- All services MUST read from this single database
+- No other database files should exist on the system
+- Use absolute paths, never relative paths
+
+**Code Location**: `/opt/coinjecture/`
+- All services run from this single directory
+- No other COINjecture installations should exist
+- Delete old installations in `/home/` or other locations
+
+**API Server**: Port 12346 (proxied via nginx to port 443)
+- Single instance running from `/opt/coinjecture/src/api/faucet_server_cors_fixed.py`
+- Reads from `/opt/coinjecture/data/blockchain.db`
+- Returns pre-calculated gas/reward values (no real-time calculation)
+
+### Endpoint Chain Verification
+
+**Server-Side Flow**:
+1. Database: `/opt/coinjecture/data/blockchain.db`
+2. Storage Layer: `src/api/blockchain_storage.py` → `get_block_data()`
+3. API Layer: `src/api/faucet_server_cors_fixed.py` → `/v1/data/block/<id>`
+4. Response: JSON with `gas_used`, `gas_limit`, `gas_price`, `reward`
+
+**Client-Side Flow**:
+1. Frontend: `web/app.js` → `fetch('/v1/data/block/<id>')`
+2. Parse: Extract `gas_used` from response
+3. Display: Show gas value in transaction list
+
+### Troubleshooting Null Values
+
+If API returns null for gas/reward:
+1. Check database has values: `sqlite3 data/blockchain.db 'SELECT gas_used, reward FROM blocks LIMIT 1;'`
+2. Check storage method returns values: Add logging to `get_block_data()`
+3. Check API endpoint includes values: Add logging to route handler
+4. Check only one API server running: `ps aux | grep faucet_server`
+5. Check API server uses correct database: Check `storage.db_path`
+
+### Implementation Status
+
+✅ **COMPLETED**: Gas and reward values now properly calculated and stored
+- Database contains gas_used (2000), gas_limit (1000000), gas_price (0.000001), reward values
+- API endpoints return non-null gas/reward values
+- Single source of truth established at `/opt/coinjecture/data/blockchain.db`
+- Port 12346 claimed for BEANS API server
+
+## Summary
+
+COINjecture is a utility-based blockchain that proves computational work through NP-Complete problem solving. The architecture separates hardware capability classes (tiers) from reward mechanisms (work score), enabling distributed participation across heterogeneous hardware. Tokenomics emerge from measured network behavior rather than predetermined schedules, creating a computational work market on-chain.
+
+Built on Satoshi's foundation. Evolved with complexity theory. Driven by real-world utility.

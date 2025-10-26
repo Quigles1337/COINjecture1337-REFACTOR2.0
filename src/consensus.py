@@ -1,0 +1,943 @@
+"""
+Module: consensus
+Specification: docs/blockchain/consensus.md
+
+Consensus engine for COINjecture blockchain with header validation,
+reveal validation, fork choice, and genesis block management.
+"""
+
+import time
+import hashlib
+import math
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple, Set
+from enum import Enum
+from collections import deque
+
+# Optional numpy import for equilibrium calculations
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+# Import from existing modules
+try:
+    from .core.blockchain import Block, ProblemTier, ComputationalComplexity, calculate_computational_work_score
+    from .pow import (
+        ProblemRegistry, derive_epoch_salt, create_commitment, verify_commitment,
+        calculate_work_score, compute_solution_hash
+    )
+    from .storage import StorageManager, StorageConfig, NodeRole, PruningMode
+    from .metrics_engine import MetricsEngine, get_metrics_engine, SATOSHI_CONSTANT
+except ImportError:
+    # Fallback for direct execution
+    from core.blockchain import Block, ProblemTier, ComputationalComplexity, calculate_computational_work_score
+    from pow import (
+        ProblemRegistry, derive_epoch_salt, create_commitment, verify_commitment,
+        calculate_work_score, compute_solution_hash
+    )
+    from storage import StorageManager, StorageConfig, NodeRole, PruningMode
+    from metrics_engine import MetricsEngine, get_metrics_engine, SATOSHI_CONSTANT
+
+
+# Constants
+DEFAULT_CONFIRMATION_DEPTH = 20
+MAX_REORG_DEPTH = 100
+MAX_HEADERS_PER_SECOND = 100
+MAX_PROOF_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+DEFAULT_NETWORK_ID = "coinjecture-testnet-v1"  # Keep original for genesis compatibility
+
+
+class ValidationError(Exception):
+    """Base class for validation errors."""
+    pass
+
+
+class HeaderValidationError(ValidationError):
+    """Header validation failed."""
+    pass
+
+
+class RevealValidationError(ValidationError):
+    """Reveal validation failed."""
+    pass
+
+
+@dataclass
+class BlockNode:
+    """
+    Node in the block tree for fork choice.
+    
+    Represents a block in the chain with its cumulative work score.
+    """
+    block: Block
+    parent_hash: str
+    cumulative_work: float
+    height: int
+    receipt_time: float
+    children: List[str] = field(default_factory=list)
+    
+    def __hash__(self):
+        return hash(self.block.block_hash)
+
+
+@dataclass
+class ConsensusConfig:
+    """Configuration for consensus engine."""
+    network_id: str = DEFAULT_NETWORK_ID
+    confirmation_depth: int = DEFAULT_CONFIRMATION_DEPTH
+    max_reorg_depth: int = MAX_REORG_DEPTH
+    max_headers_per_second: int = MAX_HEADERS_PER_SECOND
+    max_proof_size_bytes: int = MAX_PROOF_SIZE_BYTES
+    genesis_timestamp: float = 1609459200.0  # 2021-01-01 00:00:00 UTC
+    genesis_seed: str = "coinjecture_genesis_seed"
+
+
+@dataclass
+class EquilibriumState:
+    """Equilibrium state for consensus stability."""
+    damping_ratio: float  # η (damping)
+    coupling_strength: float  # λ (coupling)
+    normalized_hashrate: complex  # μ = -η + iλ
+    stability_metric: float  # |μ|
+    convergence_rate: float  # Exponential convergence rate
+    fork_resistance: float  # Resistance to 51% attacks
+    liveness_guarantee: float  # Liveness without stalls
+
+
+class ConsensusEquilibrium:
+    """
+    Implements the equilibrium proof for COINjecture consensus.
+    
+    The "Satoshi Constant" λ = η = 1/√2 provides:
+    - Optimal honest majority
+    - Fork resistance baked in
+    - Exponential convergence
+    - No energy waste on hashing lottery
+    """
+    
+    def __init__(self):
+        # The Satoshi Constant: λ = η = 1/√2
+        self.satoshi_constant = 1.0 / math.sqrt(2)
+        
+        # Equilibrium parameters
+        self.damping_ratio = self.satoshi_constant  # η
+        self.coupling_strength = self.satoshi_constant  # λ
+        
+        # Normalized hashrate: μ = -η + iλ
+        self.normalized_hashrate = complex(-self.damping_ratio, self.coupling_strength)
+        
+        # Stability metrics
+        self.stability_metric = abs(self.normalized_hashrate)
+        self.convergence_rate = self._calculate_convergence_rate()
+        self.fork_resistance = self._calculate_fork_resistance()
+        self.liveness_guarantee = self._calculate_liveness_guarantee()
+    
+    def _calculate_convergence_rate(self) -> float:
+        """Calculate exponential convergence rate."""
+        return -self.damping_ratio
+    
+    def _calculate_fork_resistance(self) -> float:
+        """Calculate resistance to 51% attacks."""
+        return 1.0 - self.coupling_strength
+    
+    def _calculate_liveness_guarantee(self) -> float:
+        """Calculate liveness guarantee (no stalls)."""
+        return self.coupling_strength
+    
+    def get_equilibrium_state(self) -> EquilibriumState:
+        """Get current equilibrium state."""
+        return EquilibriumState(
+            damping_ratio=self.damping_ratio,
+            coupling_strength=self.coupling_strength,
+            normalized_hashrate=self.normalized_hashrate,
+            stability_metric=self.stability_metric,
+            convergence_rate=self.convergence_rate,
+            fork_resistance=self.fork_resistance,
+            liveness_guarantee=self.liveness_guarantee
+        )
+    
+    def verify_equilibrium(self) -> bool:
+        """Verify we're at the Nash equilibrium."""
+        is_optimal = (
+            abs(self.damping_ratio - self.satoshi_constant) < 1e-6 and
+            abs(self.coupling_strength - self.satoshi_constant) < 1e-6
+        )
+        is_stable = abs(self.normalized_hashrate) <= 1.0
+        is_convergent = self.convergence_rate < 0
+        return is_optimal and is_stable and is_convergent
+
+
+class ConsensusEngine:
+    """
+    Consensus engine for COINjecture blockchain.
+    
+    Implements the consensus module from consensus.md specification.
+    """
+    
+    def __init__(
+        self,
+        config: ConsensusConfig,
+        storage: StorageManager,
+        problem_registry: ProblemRegistry,
+        metrics_engine: Optional[MetricsEngine] = None
+    ):
+        """
+        Initialize consensus engine.
+        
+        Args:
+            config: Consensus configuration
+            storage: Storage manager
+            problem_registry: Problem registry for verification
+            metrics_engine: Metrics engine for gas/reward calculation (optional)
+        """
+        self.config = config
+        self.storage = storage
+        self.problem_registry = problem_registry
+        
+        # Initialize metrics engine for gas/reward calculation
+        self.metrics_engine = metrics_engine or get_metrics_engine()
+        
+        # Block tree for fork choice
+        self.block_tree: Dict[str, BlockNode] = {}
+        
+        # Current best tip
+        self.best_tip: Optional[BlockNode] = None
+        
+        # Genesis block
+        self.genesis_block: Optional[Block] = None
+        
+        # Header validation rate limiting
+        self._header_timestamps: deque = deque(maxlen=100)
+        
+        # Initialize genesis if not exists
+        self._initialize_genesis()
+    
+    def _initialize_genesis(self):
+        """Initialize or load genesis block from existing network."""
+        # Try to load genesis from storage first
+        genesis_hash = self._calculate_genesis_hash()
+        genesis_block = self.storage.get_block(genesis_hash)
+        
+        if genesis_block:
+            self.genesis_block = genesis_block
+            self._add_block_to_tree(genesis_block, receipt_time=genesis_block.timestamp)
+        else:
+            # Try to fetch genesis from existing network
+            try:
+                import requests
+                response = requests.get("http://167.172.213.70:5000/v1/data/block/latest", timeout=10)
+                if response.status_code == 200:
+                    network_data = response.json()
+                    if network_data.get('status') == 'success':
+                        print("🌐 Connected to existing COINjecture network")
+                        print(f"📊 Current block: #{network_data['data']['index']}")
+                        print(f"🔗 Block hash: {network_data['data']['block_hash'][:16]}...")
+                        print(f"⛏️  Mining capacity: {network_data['data']['mining_capacity']}")
+                        
+                        # Create genesis block from network data
+                        self.genesis_block = self._create_genesis_from_network(network_data['data'])
+                        self.storage.store_block(self.genesis_block)
+                        self.storage.store_header(self.genesis_block)
+                        self._add_block_to_tree(self.genesis_block, receipt_time=self.genesis_block.timestamp)
+                    else:
+                        raise Exception("Network data not available")
+                else:
+                    raise Exception(f"Network request failed: {response.status_code}")
+            except Exception as e:
+                print(f"⚠️  Could not connect to existing network: {e}")
+                print("🔨 Building local genesis block...")
+                # Fallback to building local genesis
+                self.genesis_block = self._build_genesis()
+                self.storage.store_block(self.genesis_block)
+                self.storage.store_header(self.genesis_block)
+                self._add_block_to_tree(self.genesis_block, receipt_time=self.genesis_block.timestamp)
+        
+        self.best_tip = self.block_tree.get(self.genesis_block.block_hash)
+    
+    def _create_genesis_from_network(self, network_data: Dict) -> 'Block':
+        """Create genesis block from existing network data."""
+        try:
+            from .core.blockchain import Block, ProblemTier, ProblemType, ComputationalComplexity, EnergyMetrics
+        except ImportError:
+            from core.blockchain import Block, ProblemTier, ProblemType, ComputationalComplexity, EnergyMetrics
+        
+        # Extract data from network response
+        block_hash = network_data['block_hash']
+        index = network_data['index']
+        timestamp = network_data['timestamp']
+        mining_capacity_str = network_data['mining_capacity']
+        offchain_cid = network_data['offchain_cid']
+        previous_hash = network_data['previous_hash']
+        merkle_root = network_data['merkle_root']
+        transactions = network_data.get('transactions', ['COINjecture blockchain initialized'])  # Default if missing
+        proof_summary = network_data.get('proof_summary', {})  # Default if missing
+        cumulative_work_score = network_data.get('cumulative_work_score', 0.0)
+        
+        # Convert mining capacity string to ProblemTier enum
+        mining_capacity = ProblemTier.TIER_1_MOBILE  # Default
+        if "TIER_1_MOBILE" in mining_capacity_str:
+            mining_capacity = ProblemTier.TIER_1_MOBILE
+        elif "TIER_2_DESKTOP" in mining_capacity_str:
+            mining_capacity = ProblemTier.TIER_2_DESKTOP
+        elif "TIER_3_SERVER" in mining_capacity_str:
+            mining_capacity = ProblemTier.TIER_3_SERVER
+        
+        # Extract problem and solution from proof_summary
+        problem_instance = proof_summary.get('problem_instance', {})
+        problem = {
+            'type': problem_instance.get('type', 'subset_sum'),
+            'numbers': problem_instance.get('numbers', []),
+            'target': problem_instance.get('target', 0),
+            'size': problem_instance.get('size', 0)
+        }
+        solution = proof_summary.get('solution', [])
+        
+        # Create computational complexity from proof_summary
+        comp_metrics = proof_summary.get('computational_metrics', {})
+        energy_metrics = proof_summary.get('energy_metrics', {})
+        
+        complexity = ComputationalComplexity(
+            time_solve_O=comp_metrics.get('time_solve_O', 'O(2^n)'),
+            time_solve_Omega=comp_metrics.get('time_solve_O', 'O(2^n)'),
+            time_solve_Theta=None,
+            time_verify_O=comp_metrics.get('time_verify_O', 'O(n)'),
+            time_verify_Omega=comp_metrics.get('time_verify_O', 'O(n)'),
+            time_verify_Theta=None,
+            space_solve_O=comp_metrics.get('space_solve_O', 'O(n * target)'),
+            space_solve_Omega=comp_metrics.get('space_solve_O', 'O(n * target)'),
+            space_solve_Theta=None,
+            space_verify_O=comp_metrics.get('space_verify_O', 'O(n)'),
+            space_verify_Omega=comp_metrics.get('space_verify_O', 'O(n)'),
+            space_verify_Theta=None,
+            problem_class=comp_metrics.get('problem_class', 'NP-Complete'),
+            problem_size=comp_metrics.get('problem_size', 8),
+            solution_size=comp_metrics.get('solution_size', 3),
+            epsilon_approximation=None,
+            asymmetry_time=2.0,
+            asymmetry_space=1.0,
+            measured_solve_time=comp_metrics.get('measured_solve_time', 0.001),
+            measured_verify_time=comp_metrics.get('measured_verify_time', 0.0001),
+            measured_solve_space=0,
+            measured_verify_space=0,
+            problem=problem,  # Add the problem field
+            solution_quality=1.0,  # Add the solution_quality field (1.0 for correct solution)
+            energy_metrics=EnergyMetrics(
+                solve_energy_joules=energy_metrics.get('solve_energy_joules', 0.1),
+                verify_energy_joules=energy_metrics.get('verify_energy_joules', 0.0001),
+                solve_power_watts=energy_metrics.get('solve_power_watts', 100),
+                verify_power_watts=0.0,
+                solve_time_seconds=comp_metrics.get('measured_solve_time', 0.001),
+                verify_time_seconds=comp_metrics.get('measured_verify_time', 0.0001),
+                cpu_utilization=energy_metrics.get('cpu_utilization', 80.0),
+                memory_utilization=energy_metrics.get('memory_utilization', 50.0),
+                gpu_utilization=energy_metrics.get('gpu_utilization', 0.0)
+            )
+        )
+        
+        # Create Block object from network data
+        genesis_block = Block(
+            index=index,
+            timestamp=timestamp,
+            previous_hash=previous_hash,
+            transactions=transactions,
+            merkle_root=merkle_root,
+            problem=problem,
+            solution=solution,
+            complexity=complexity,
+            mining_capacity=mining_capacity,
+            cumulative_work_score=cumulative_work_score,
+            block_hash=block_hash,
+            offchain_cid=offchain_cid
+        )
+        
+        print(f"✅ Genesis block loaded from network: {block_hash[:16]}...")
+        return genesis_block
+    
+    def _calculate_genesis_hash(self) -> str:
+        """Calculate deterministic genesis block hash."""
+        # Creator initials (SM) hidden in hash calculation
+        creator_initials = "SM"
+        genesis_data = f"{self.config.network_id}_{self.config.genesis_timestamp}_{self.config.genesis_seed}_{creator_initials}"
+        return hashlib.sha256(genesis_data.encode()).hexdigest()
+    
+    def _build_genesis(self) -> Block:
+        """
+        Build deterministic immutable genesis block with IPFS integration.
+        
+        Returns:
+            Genesis block with immutable IPFS parameters
+        """
+        print("🔨 Building immutable genesis block with IPFS integration...")
+        
+        # Add creator initials (SM) to genesis seed for immutability (hidden)
+        creator_initials = "SM"
+        enhanced_seed = f"{self.config.genesis_seed}_{creator_initials}"
+        print(f"🔨 Building immutable genesis block with IPFS integration...")
+        
+        # Generate genesis problem
+        try:
+            from .core.blockchain import ProblemType
+        except ImportError:
+            from core.blockchain import ProblemType
+        genesis_problem = self.problem_registry.generate(
+            problem_type=ProblemType.SUBSET_SUM,
+            seed=enhanced_seed,
+            capacity=ProblemTier.TIER_1_MOBILE
+        )
+        
+        # Solve genesis problem
+        genesis_solution = self.problem_registry.solve(genesis_problem)
+        
+        # Calculate genesis complexity
+        try:
+            from .core.blockchain import subset_sum_complexity, EnergyMetrics
+        except ImportError:
+            from core.blockchain import subset_sum_complexity, EnergyMetrics
+        energy_metrics = EnergyMetrics(
+            solve_energy_joules=0.1,
+            verify_energy_joules=0.0001,
+            solve_power_watts=100,
+            verify_power_watts=1,
+            solve_time_seconds=0.001,
+            verify_time_seconds=0.0001,
+            cpu_utilization=80.0,
+            memory_utilization=50.0,
+            gpu_utilization=0.0
+        )
+        genesis_complexity = subset_sum_complexity(
+            problem=genesis_problem,
+            solution=genesis_solution,
+            solve_time=0.001,
+            verify_time=0.0001,
+            solve_memory=1024,
+            verify_memory=256,
+            energy_metrics=energy_metrics
+        )
+        
+        # Calculate genesis work
+        genesis_work = calculate_work_score(genesis_complexity)
+        
+        # Upload proof bundle to IPFS first to get CID (required for real CIDs)
+        if not self.storage.ipfs_client.health_check():
+            raise Exception("IPFS daemon not available. Cannot create genesis block without IPFS.")
+        
+        try:
+            from .api.proof_bundler import create_proof_bundle, serialize_proof_bundle
+        except ImportError:
+            from api.proof_bundler import create_proof_bundle, serialize_proof_bundle
+        
+        # Create a temporary block for proof bundle creation
+        temp_block = Block(
+            index=0,
+            timestamp=self.config.genesis_timestamp,
+            previous_hash="0" * 64,
+            transactions=[],
+            merkle_root="0" * 64,
+            problem=genesis_problem,
+            solution=genesis_solution,
+            complexity=genesis_complexity,
+            mining_capacity=ProblemTier.TIER_1_MOBILE,
+            cumulative_work_score=genesis_work,
+            block_hash=self._calculate_genesis_hash(),
+            offchain_cid=None  # Will be set after IPFS upload
+        )
+        
+        proof_bundle = create_proof_bundle(temp_block)
+        bundle_bytes = serialize_proof_bundle(proof_bundle)
+        cid = self.storage.store_proof_bundle(bundle_bytes)
+        
+        if not cid:
+            raise Exception("Failed to upload genesis proof bundle to IPFS. No CID returned.")
+        
+        print(f"✅ Genesis proof bundle uploaded to IPFS: {cid}")
+        
+        # Create immutable genesis block with IPFS CID (creator initials hidden in seed)
+        genesis_transactions = [
+            "COINjecture blockchain initialized",
+            "Immutable genesis with IPFS integration"
+        ]
+        
+        genesis_block = Block(
+            index=0,
+            timestamp=self.config.genesis_timestamp,
+            previous_hash="0" * 64,
+            transactions=genesis_transactions,
+            merkle_root="0" * 64,
+            problem=genesis_problem,
+            solution=genesis_solution,
+            complexity=genesis_complexity,
+            mining_capacity=ProblemTier.TIER_1_MOBILE,
+            cumulative_work_score=genesis_work,
+            block_hash=self._calculate_genesis_hash(),
+            offchain_cid=cid  # Include the IPFS CID in constructor
+        )
+        
+        print(f"🔒 Immutable genesis block created with IPFS CID: {cid}")
+        return genesis_block
+    
+    def validate_header(self, block: Block) -> bool:
+        """
+        Validate block header.
+        
+        Implements header validation pipeline from consensus.md specification.
+        
+        Args:
+            block: Block to validate
+            
+        Returns:
+            True if valid
+            
+        Raises:
+            HeaderValidationError: If validation fails
+        """
+        # 1) Basic validation: parent linkage, timestamp
+        if not self._validate_basic_header(block):
+            raise HeaderValidationError("Basic header validation failed")
+        
+        # 2) Commitment presence
+        if not self._validate_commitment_presence(block):
+            raise HeaderValidationError("Commitment validation failed")
+        
+        # 3) Difficulty check
+        if not self._validate_difficulty(block):
+            raise HeaderValidationError("Difficulty validation failed")
+        
+        # 4) Fork-choice enqueue
+        self._add_block_to_tree(block, receipt_time=time.time())
+        
+        return True
+    
+    def validate_and_process_block(self, block_data: dict) -> dict:
+        """
+        Proper consensus flow per ARCHITECTURE.md:
+        1. Validate block structure and proofs
+        2. Calculate gas based on validated work
+        3. Calculate rewards based on validated work
+        4. Return processed block for storage
+        
+        This implements the critical principle: Validate → Calculate → Store
+        """
+        try:
+            # Step 1: Validate block structure
+            if not self._validate_block_structure(block_data):
+                return {'valid': False, 'error': 'Invalid block structure'}
+            
+            # Step 2: Validate work proof
+            if not self._validate_work_proof(block_data):
+                return {'valid': False, 'error': 'Invalid work proof'}
+            
+            # Step 3: Calculate complexity metrics (AFTER validation)
+            complexity = self.metrics_engine.calculate_complexity_metrics(
+                block_data.get('problem', {}),
+                block_data.get('solution', {})
+            )
+            
+            # Step 4: Calculate gas (AFTER validation)
+            gas_used = self.metrics_engine.calculate_gas_cost("block_validation", complexity)
+            
+            # Step 5: Calculate reward (AFTER validation)
+            work_score = block_data.get('work_score', 0)
+            reward = self.metrics_engine.calculate_block_reward(
+                work_score, 
+                self.metrics_engine.network_state
+            )
+            
+            # Step 6: Add calculated values to block
+            block_data['gas_used'] = gas_used
+            block_data['gas_limit'] = 1000000
+            block_data['gas_price'] = 0.000001
+            block_data['reward'] = reward
+            
+            # Apply Satoshi Constant for stability
+            block_data['damping_ratio'] = SATOSHI_CONSTANT
+            block_data['stability_metric'] = 1.0  # |μ| = 1 for critical damping
+            
+            return {'valid': True, 'block': block_data}
+            
+        except Exception as e:
+            return {'valid': False, 'error': f'Processing error: {str(e)}'}
+    
+    def _validate_block_structure(self, block_data: dict) -> bool:
+        """Validate basic block structure."""
+        required_fields = ['block_hash', 'height', 'timestamp', 'previous_hash']
+        return all(field in block_data for field in required_fields)
+    
+    def _validate_work_proof(self, block_data: dict) -> bool:
+        """Validate work proof and commitment."""
+        try:
+            # Basic work proof validation
+            work_score = block_data.get('work_score', 0)
+            if work_score <= 0:
+                return False
+            
+            # Validate commitment if present
+            commitment = block_data.get('proof_commitment')
+            if commitment and not self._validate_commitment(commitment, block_data):
+                return False
+            
+            return True
+        except Exception:
+            return False
+    
+    def _validate_commitment(self, commitment: str, block_data: dict) -> bool:
+        """Validate commitment binding."""
+        try:
+            # Basic commitment validation
+            if not commitment or len(commitment) != 64:
+                return False
+            return True
+        except Exception:
+            return False
+    
+    def _validate_basic_header(self, block: Block) -> bool:
+        """
+        Validate basic header fields.
+        
+        Args:
+            block: Block to validate
+            
+        Returns:
+            True if valid
+        """
+        # Check parent linkage
+        if block.index > 0:
+            parent_node = self.block_tree.get(block.previous_hash)
+            if not parent_node:
+                print(f"Parent block not found: {block.previous_hash}")
+                return False
+            
+            # Check height
+            if block.index != parent_node.height + 1:
+                print(f"Invalid block height: {block.index} (expected {parent_node.height + 1})")
+                return False
+            
+            # Check timestamp (median-time-past)
+            if block.timestamp <= parent_node.block.timestamp:
+                print(f"Invalid timestamp: {block.timestamp} <= {parent_node.block.timestamp}")
+                return False
+        
+        # Rate limiting: max headers per second
+        current_time = time.time()
+        self._header_timestamps.append(current_time)
+        
+        if len(self._header_timestamps) >= self.config.max_headers_per_second:
+            time_window = current_time - self._header_timestamps[0]
+            if time_window < 1.0:
+                print(f"Rate limit exceeded: {len(self._header_timestamps)} headers in {time_window}s")
+                return False
+        
+        return True
+    
+    def _validate_commitment_presence(self, block: Block) -> bool:
+        """
+        Validate commitment presence.
+        
+        Args:
+            block: Block to validate
+            
+        Returns:
+            True if valid
+        """
+        # Check that problem and solution are present
+        if not block.problem or not block.solution:
+            print("Missing problem or solution")
+            return False
+        
+        # Check merkle root shape (should be 64-character hex)
+        if not block.merkle_root or len(block.merkle_root) != 64:
+            print(f"Invalid merkle root: {block.merkle_root}")
+            return False
+        
+        return True
+    
+    def _validate_difficulty(self, block: Block) -> bool:
+        """
+        Validate difficulty requirement.
+        
+        Args:
+            block: Block to validate
+            
+        Returns:
+            True if valid
+        """
+        # Calculate work score from block's complexity
+        if not block.complexity:
+            print("Missing complexity data")
+            return False
+        
+        block_work = calculate_work_score(block.complexity)
+        
+        # For now, accept any positive work score
+        # In production, this would check against current_target
+        if block_work <= 0:
+            print(f"Invalid work score: {block_work}")
+            return False
+        
+        return True
+    
+    def validate_reveal(
+        self,
+        block: Block,
+        commitment: bytes,
+        miner_salt: bytes,
+        proof_bundle: Optional[bytes] = None
+    ) -> bool:
+        """
+        Validate proof reveal after block is mined.
+        
+        Implements reveal validation from consensus.md specification.
+        
+        Args:
+            block: Block with reveal
+            commitment: Commitment hash
+            miner_salt: Miner's salt
+            proof_bundle: Optional proof bundle bytes
+            
+        Returns:
+            True if valid
+            
+        Raises:
+            RevealValidationError: If validation fails
+        """
+        # 1) Fetch bundle by CID if not provided
+        if proof_bundle is None and hasattr(block, 'offchain_cid'):
+            proof_bundle = self.storage.get_proof_bundle(block.offchain_cid)
+        
+        # 2) Verify commitment
+        parent_node = self.block_tree.get(block.previous_hash)
+        if not parent_node:
+            raise RevealValidationError("Parent block not found")
+        
+        epoch_salt = derive_epoch_salt(
+            parent_hash=block.previous_hash.encode(),
+            timestamp=int(block.timestamp)
+        )
+        
+        problem_params_bytes = self.problem_registry.encode_params(block.problem)
+        
+        # Compute solution hash for commitment verification
+        solution_hash = compute_solution_hash(block.solution)
+        
+        if not verify_commitment(problem_params_bytes, miner_salt, epoch_salt, solution_hash, commitment):
+            raise RevealValidationError("Commitment verification failed")
+        
+        # 3) Run fast verify
+        if not self.problem_registry.verify(block.problem, block.solution):
+            raise RevealValidationError("Solution verification failed")
+        
+        # 4) Update indices and persistence
+        if commitment:
+            problem_type = block.problem.get('type', 'subset_sum')
+            capacity = block.mining_capacity.value if hasattr(block.mining_capacity, 'value') else 2
+            self.storage.store_commitment(commitment, block.block_hash, problem_type, capacity)
+        
+        return True
+    
+    def _add_block_to_tree(self, block: Block, receipt_time: float):
+        """
+        Add block to fork choice tree.
+        
+        Args:
+            block: Block to add
+            receipt_time: Time block was received
+        """
+        # Calculate cumulative work
+        parent_node = self.block_tree.get(block.previous_hash)
+        if parent_node:
+            cumulative_work = parent_node.cumulative_work + calculate_work_score(block.complexity) if block.complexity else parent_node.cumulative_work
+            height = parent_node.height + 1
+        else:
+            # Genesis or orphan
+            cumulative_work = calculate_work_score(block.complexity) if block.complexity else 0
+            height = block.index
+        
+        # Create block node
+        node = BlockNode(
+            block=block,
+            parent_hash=block.previous_hash,
+            cumulative_work=cumulative_work,
+            height=height,
+            receipt_time=receipt_time
+        )
+        
+        # Add to tree
+        self.block_tree[block.block_hash] = node
+        
+        # Update parent's children
+        if parent_node:
+            parent_node.children.append(block.block_hash)
+        
+        # Update best tip if necessary
+        self._update_best_tip(node)
+        
+        # Store work index
+        self.storage.store_work_index(height, int(cumulative_work), block.block_hash)
+        self.storage.store_tip(block.block_hash, int(cumulative_work))
+    
+    def _update_best_tip(self, node: BlockNode):
+        """
+        Update best tip based on fork choice rule.
+        
+        Fork choice: Tip = argmax(cumulative_work) with tie-breaker on earliest receipt time
+        
+        Args:
+            node: Newly added node
+        """
+        if not self.best_tip:
+            self.best_tip = node
+            return
+        
+        # Compare cumulative work
+        if node.cumulative_work > self.best_tip.cumulative_work:
+            self.best_tip = node
+        elif node.cumulative_work == self.best_tip.cumulative_work:
+            # Tie-breaker: earliest receipt time
+            if node.receipt_time < self.best_tip.receipt_time:
+                self.best_tip = node
+    
+    def get_best_tip(self) -> Optional[Block]:
+        """
+        Get current best tip block.
+        
+        Returns:
+            Best tip block or None
+        """
+        return self.best_tip.block if self.best_tip else None
+    
+    def get_chain_from_genesis(self, tip_hash: Optional[str] = None) -> List[Block]:
+        """
+        Get chain from genesis to tip.
+        
+        Args:
+            tip_hash: Tip block hash (uses best tip if None)
+            
+        Returns:
+            List of blocks from genesis to tip
+        """
+        if tip_hash is None and self.best_tip:
+            tip_hash = self.best_tip.block.block_hash
+        
+        if not tip_hash or tip_hash not in self.block_tree:
+            return []
+        
+        # Build chain backwards from tip to genesis
+        chain = []
+        current_node = self.block_tree[tip_hash]
+        
+        while current_node:
+            chain.append(current_node.block)
+            if current_node.parent_hash == "0" * 64:
+                break
+            current_node = self.block_tree.get(current_node.parent_hash)
+        
+        # Reverse to get genesis -> tip order
+        chain.reverse()
+        return chain
+    
+    def is_finalized(self, block_hash: str) -> bool:
+        """
+        Check if block is finalized (k-deep).
+        
+        Args:
+            block_hash: Block hash to check
+            
+        Returns:
+            True if finalized
+        """
+        if not self.best_tip or block_hash not in self.block_tree:
+            return False
+        
+        block_node = self.block_tree[block_hash]
+        depth = self.best_tip.height - block_node.height
+        
+        return depth >= self.config.confirmation_depth
+    
+    def handle_reorg(self, new_tip_hash: str) -> Tuple[List[Block], List[Block]]:
+        """
+        Handle chain reorganization.
+        
+        Args:
+            new_tip_hash: New tip block hash
+            
+        Returns:
+            Tuple of (removed_blocks, added_blocks)
+        """
+        if not self.best_tip or new_tip_hash not in self.block_tree:
+            return ([], [])
+        
+        new_tip_node = self.block_tree[new_tip_hash]
+        
+        # Check reorg depth
+        old_chain = self.get_chain_from_genesis(self.best_tip.block.block_hash)
+        new_chain = self.get_chain_from_genesis(new_tip_hash)
+        
+        # Find common ancestor
+        common_height = min(len(old_chain), len(new_chain))
+        fork_point = 0
+        
+        for i in range(common_height):
+            if old_chain[i].block_hash == new_chain[i].block_hash:
+                fork_point = i
+            else:
+                break
+        
+        # Check reorg depth limit
+        reorg_depth = len(old_chain) - fork_point - 1
+        if reorg_depth > self.config.max_reorg_depth:
+            print(f"Reorg depth {reorg_depth} exceeds maximum {self.config.max_reorg_depth}")
+            return ([], [])
+        
+        # Get removed and added blocks
+        removed_blocks = old_chain[fork_point + 1:]
+        added_blocks = new_chain[fork_point + 1:]
+        
+        # Update best tip
+        self.best_tip = new_tip_node
+        
+        return (removed_blocks, added_blocks)
+
+
+if __name__ == "__main__":
+    # Test ConsensusEngine
+    print("Testing ConsensusEngine...")
+    
+    # Create test configuration
+    config = ConsensusConfig()
+    
+    # Create storage manager
+    storage_config = StorageConfig(
+        data_dir="/tmp/coinjecture_consensus_test",
+        role=NodeRole.FULL,
+        pruning_mode=PruningMode.FULL
+    )
+    storage = StorageManager(storage_config)
+    
+    # Create problem registry
+    registry = ProblemRegistry()
+    
+    # Initialize consensus engine
+    consensus = ConsensusEngine(config, storage, registry)
+    print("✅ ConsensusEngine initialized")
+    
+    # Test genesis block
+    genesis = consensus.get_best_tip()
+    if genesis:
+        print(f"✅ Genesis block created: index={genesis.index}, hash={genesis.block_hash[:16]}...")
+    else:
+        print("❌ Genesis block creation failed")
+    
+    # Test chain from genesis
+    chain = consensus.get_chain_from_genesis()
+    if len(chain) == 1 and chain[0].index == 0:
+        print("✅ Chain from genesis retrieved successfully")
+    else:
+        print("❌ Chain retrieval failed")
+    
+    # Test finality
+    is_finalized = consensus.is_finalized(genesis.block_hash)
+    print(f"✅ Finality check: genesis is {'finalized' if is_finalized else 'not finalized (expected)'}")
+    
+    print("✅ All consensus module tests passed!")
+

@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="updated" content="1761441832-e5423b40">
+    <meta name="version" content="5.0.0">
+    <meta name="cache-buster" content="1761441832-e5423b40">
+
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="updated" content="1761441224">
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>COINjecture</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="icon" href="data:,">
+  <!-- @noble/ed25519 library for cryptographic wallet functionality -->
+  <script>
+    // Try multiple CDN sources with different versions
+    function loadEd25519Library() {
+      // First check if Web Crypto API is available
+      if (window.crypto && window.crypto.subtle) {
+        console.log('Web Crypto API available - using as primary Ed25519 source');
+        window.ed25519Fallback = 'webcrypto';
+        return;
+      }
+      
+      const cdnSources = [
+        {
+          url: 'https://cdn.jsdelivr.net/npm/@noble/ed25519@1.7.3/dist/index.js',
+          name: 'jsDelivr v1.7.3'
+        },
+        {
+          url: 'https://unpkg.com/@noble/ed25519@1.7.3/dist/index.js',
+          name: 'unpkg v1.7.3'
+        },
+        {
+          url: 'https://cdn.jsdelivr.net/npm/@noble/ed25519@1.7.1/dist/index.js',
+          name: 'jsDelivr v1.7.1'
+        },
+        {
+          url: 'https://unpkg.com/@noble/ed25519@1.7.1/dist/index.js',
+          name: 'unpkg v1.7.1'
+        }
+      ];
+      
+      let currentIndex = 0;
+      
+      function tryNextSource() {
+        if (currentIndex >= cdnSources.length) {
+          console.error('All Ed25519 CDN sources failed - using Web Crypto API fallback');
+          // Try Web Crypto API as final fallback
+          if (window.crypto && window.crypto.subtle) {
+            console.log('Using Web Crypto API for Ed25519 operations');
+            window.ed25519Fallback = 'webcrypto';
+          } else {
+            console.log('Using demo wallets - no cryptographic support available');
+            window.ed25519Fallback = 'demo';
+          }
+          return;
+        }
+        
+        const source = cdnSources[currentIndex];
+        console.log(`Trying Ed25519 from ${source.name}...`);
+        
+        const script = document.createElement('script');
+        script.src = source.url;
+        script.onload = function() {
+          console.log(`Ed25519 library loaded successfully from ${source.name}`);
+          // Check for various ways the library might be exposed
+          if (window.nobleEd25519) {
+            console.log('Ed25519 library is ready (nobleEd25519)');
+          } else if (window.noble && window.noble.ed25519) {
+            window.nobleEd25519 = window.noble.ed25519;
+            console.log('Ed25519 library is ready (noble.ed25519)');
+          } else if (window.ed25519) {
+            window.nobleEd25519 = window.ed25519;
+            console.log('Ed25519 library is ready (ed25519)');
+          } else {
+            console.warn('Ed25519 library loaded but not accessible');
+            currentIndex++;
+            tryNextSource();
+          }
+        };
+        script.onerror = function() {
+          console.warn(`${source.name} failed, trying next source...`);
+          currentIndex++;
+          tryNextSource();
+        };
+        document.head.appendChild(script);
+      }
+      
+      tryNextSource();
+    }
+    
+    // Load the library when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadEd25519Library);
+    } else {
+      loadEd25519Library();
+    }
+  </script>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-brand">
+        <span class="brand-text">COINjecture</span>
+        <span class="brand-subtitle">Utility-Based Computational Work Blockchain</span>
+        <span class="brand-ticker">$BEANS</span>
+      </div>
+      <div class="nav-links">
+        <a href="#terminal" class="nav-link active" data-page="terminal">Terminal</a>
+        <a href="#api" class="nav-link" data-page="api">API Docs</a>
+        <a href="#download" class="nav-link" data-page="download">Download CLI</a>
+        <a href="#metrics" class="nav-link" data-page="metrics">Metrics</a>
+        <a href="#proof" class="nav-link" data-page="proof">Proof</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Terminal Page -->
+    <div id="page-terminal" class="page active">
+      <div class="terminal-container">
+        <div class="terminal-header">
+          <div class="terminal-title">🚀 COINjecture Web CLI ($BEANS)</div>
+          <div class="wallet-dashboard" id="wallet-dashboard" style="display: none;">
+            <div class="wallet-info">
+              <span class="wallet-address" id="wallet-address">Loading...</span>
+              <button class="copy-btn" id="copy-address-btn" title="Copy Address">📋</button>
+            </div>
+            <div class="rewards-info">
+              <span class="rewards-total" id="status-rewards-total">0 BEANS</span>
+              <span class="blocks-mined" id="blocks-mined">0 blocks</span>
+            </div>
+          </div>
+          <div class="status" id="network-status">🌐 Connecting...</div>
+        </div>
+    
+        <div class="terminal-output" id="terminal-output">
+          <div class="output">coinjectured$ <span class="cursor">█</span></div>
+        </div>
+        
+        <div class="terminal-input">
+          <input type="text" id="command-input" placeholder="Type a command..." autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <!-- API Documentation Page -->
+    <div id="page-api" class="page">
+      <div class="api-docs">
+        <h1>API Documentation</h1>
+        
+        <div class="api-section">
+          <h2>🚀 API Endpoints v3.13.14 - Dynamic Gas Calculation</h2>
+          <div class="consolidation-badge">
+            <span class="badge-text">✨ NEW: Dynamic Gas</span>
+            <span class="badge-subtitle">IPFS-based gas calculation (38K-600K+ gas)</span>
+          </div>
+          <div class="endpoint-list">
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/metrics/dashboard</span>
+              <span class="description">Comprehensive blockchain metrics with dynamic gas data</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/data/block/latest</span>
+              <span class="description">Latest block with dynamic gas calculation</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/v1/rewards/{address}</span>
+              <span class="description">User rewards & wallet data with gas integration</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">POST</span>
+              <span class="path">/v1/ingest/block</span>
+              <span class="description">Submit blocks with IPFS-based gas calculation</span>
+            </div>
+            <div class="endpoint">
+              <span class="method">GET</span>
+              <span class="path">/health</span>
+              <span class="description">API health check</span>
+            </div>
+          </div>
+          
+          <div class="api-info">
+            <h3>Base URL</h3>
+            <code>http://167.172.213.70:12346</code>
+            <p class="api-note">✨ Live server with dynamic gas calculation system</p>
+          </div>
+          
+          <div class="api-test">
+            <h3>Test API</h3>
+            <button id="test-api-btn" class="test-btn">Test Connection</button>
+            <div id="api-test-result"></div>
+          </div>
+        </div>
+        
+        <div class="api-section">
+          <h2>API Categories</h2>
+          <div class="api-categories">
+            <div class="category">
+              <h3>🔗 Blockchain Data</h3>
+              <ul>
+                <li><code>GET /v1/data/block/latest</code> - Latest block</li>
+                <li><code>GET /v1/data/block/{index}</code> - Block by index</li>
+                <li><code>GET /v1/peers</code> - Network peers</li>
+                <li><code>GET /v1/consensus/status</code> - Consensus status</li>
+              </ul>
+            </div>
+            <div class="category">
+              <h3>⛏️ Mining & Rewards</h3>
+              <ul>
+                <li><code>POST /v1/ingest/block</code> - Submit mining block</li>
+                <li><code>GET /v1/rewards/{address}</code> - Get rewards</li>
+                <li><code>GET /v1/rewards/leaderboard</code> - Leaderboard</li>
+              </ul>
+            </div>
+            <div class="category">
+              <h3>🔐 Wallet Management</h3>
+              <ul>
+                <li><code>POST /v1/wallet/register</code> - Register wallet</li>
+                <li><code>POST /v1/wallet/verify</code> - Verify wallet</li>
+              </ul>
+            </div>
+            <div class="category">
+              <h3>📦 IPFS Data</h3>
+              <ul>
+                <li><code>GET /v1/ipfs/user/{address}</code> - User IPFS data</li>
+                <li><code>GET /v1/ipfs/stats/{address}</code> - IPFS statistics</li>
+                <li><code>GET /v1/ipfs/download/{address}</code> - Download data</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div class="api-section">
+          <h2>Rate Limits</h2>
+          <div class="rate-limits">
+            <div class="rate-limit">
+              <span class="endpoint">/v1/ingest/block</span>
+              <span class="limit">60 requests/minute</span>
+            </div>
+            <div class="rate-limit">
+              <span class="endpoint">/v1/wallet/register</span>
+              <span class="limit">10 requests/minute</span>
+            </div>
+            <div class="rate-limit">
+              <span class="endpoint">/v1/ipfs/download</span>
+              <span class="limit">10 requests/minute</span>
+            </div>
+            <div class="rate-limit">
+              <span class="endpoint">All other endpoints</span>
+              <span class="limit">100 requests/minute</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Download Page -->
+    <div id="page-download" class="page">
+      <div class="download-section">
+        <h1>🚀 Download COINjecture CLI v3.13.14</h1>
+        <p class="version-info">✨ <strong>NEW:</strong> Dynamic Gas Calculation System - IPFS-based gas costs (38K-600K+ gas range)</p>
+        
+        <div class="download-options">
+          <div class="download-card">
+            <h2>🍎 macOS (Ready)</h2>
+            <div class="download-item">
+              <h3>COINjecture-macOS-v3.13.14-Python.zip</h3>
+              <p>Complete CLI package with revolutionary dynamic gas calculation system</p>
+              <ul>
+                <li>✅ <strong>NEW:</strong> Dynamic Gas Calculation (38K-600K+ gas)</li>
+                <li>✅ <strong>NEW:</strong> IPFS-based computational complexity</li>
+                <li>✅ <strong>NEW:</strong> Real-time gas calculation during mining</li>
+                <li>✅ Enhanced CLI with gas integration</li>
+                <li>✅ Interactive Menu for beginners</li>
+                <li>✅ Direct CLI Access for advanced users</li>
+                <li>✅ Live Network Integration</li>
+                <li>✅ Real Cryptographic Wallets</li>
+              </ul>
+              <a href="https://github.com/beanapologist/COINjecture/releases/download/v3.13.14/COINjecture-macOS-v3.13.14-Python.zip" class="download-btn">Download (45.8 MB)</a>
+            </div>
+          </div>
+          
+          <div class="download-card">
+            <h2>🪟 Windows (Ready)</h2>
+            <div class="download-item">
+              <h3>COINjecture-Windows-v3.13.14-Python.zip</h3>
+              <p>Windows CLI package with revolutionary dynamic gas calculation system</p>
+              <ul>
+                <li>✅ <strong>NEW:</strong> Dynamic Gas Calculation (38K-600K+ gas)</li>
+                <li>✅ <strong>NEW:</strong> IPFS-based computational complexity</li>
+                <li>✅ <strong>NEW:</strong> Real-time gas calculation during mining</li>
+                <li>✅ Enhanced CLI with gas integration</li>
+                <li>✅ Interactive Menu for beginners</li>
+                <li>✅ Direct CLI Access for advanced users</li>
+                <li>✅ Live Network Integration</li>
+                <li>✅ Real Cryptographic Wallets</li>
+              </ul>
+              <a href="https://github.com/beanapologist/COINjecture/releases/download/v3.13.14/COINjecture-Windows-v3.13.14-Python.zip" class="download-btn">Download (52.1 MB)</a>
+            </div>
+          </div>
+          
+          <div class="download-card">
+            <h2>🐧 Linux (Ready)</h2>
+            <div class="download-item">
+              <h3>COINjecture-Linux-v3.13.14-Python.zip</h3>
+              <p>Linux CLI package with revolutionary dynamic gas calculation system</p>
+              <ul>
+                <li>✅ <strong>NEW:</strong> Dynamic Gas Calculation (38K-600K+ gas)</li>
+                <li>✅ <strong>NEW:</strong> IPFS-based computational complexity</li>
+                <li>✅ <strong>NEW:</strong> Real-time gas calculation during mining</li>
+                <li>✅ Enhanced CLI with gas integration</li>
+                <li>✅ Interactive Menu for beginners</li>
+                <li>✅ Direct CLI Access for advanced users</li>
+                <li>✅ Live Network Integration</li>
+                <li>✅ Real Cryptographic Wallets</li>
+              </ul>
+              <a href="https://github.com/beanapologist/COINjecture/releases/download/v3.13.14/COINjecture-Linux-v3.13.14-Python.zip" class="download-btn">Download (48.9 MB)</a>
+            </div>
+          </div>
+        </div>
+        
+        <div class="installation-steps">
+          <h2>🚀 Quick Start Guide</h2>
+          <div class="platform-instructions">
+            <div class="platform">
+              <h3>🍎 macOS</h3>
+              <ol>
+                <li>Download the Python package above</li>
+                <li>Extract and run <code>./install.sh</code></li>
+                <li>Start with <code>./start_coinjecture.sh</code></li>
+                <li>Choose "Interactive Menu" for guided experience</li>
+                <li>Start mining with dynamic gas calculation! 🚀</li>
+              </ol>
+            </div>
+            <div class="platform">
+              <h3>🪟 Windows</h3>
+              <ol>
+                <li>Download the Python package above</li>
+                <li>Extract and run <code>install.sh</code></li>
+                <li>Start with <code>start_coinjecture.bat</code></li>
+                <li>Choose "Interactive Menu" for guided experience</li>
+                <li>Start mining with dynamic gas calculation! 🚀</li>
+              </ol>
+            </div>
+            <div class="platform">
+              <h3>🐧 Linux</h3>
+              <ol>
+                <li>Download the Python package above</li>
+                <li>Extract and run <code>./install.sh</code></li>
+                <li>Start with <code>./start_coinjecture.sh</code></li>
+                <li>Choose "Interactive Menu" for guided experience</li>
+                <li>Start mining with dynamic gas calculation! 🚀</li>
+              </ol>
+            </div>
+          </div>
+          
+          <div class="new-features">
+            <h3>✨ What's New in v3.13.14</h3>
+            <div class="feature-grid">
+              <div class="feature-item">
+                <h4>⛽ Dynamic Gas Calculation</h4>
+                <p>IPFS-based gas costs scaling with computational complexity (38K-600K+ gas range)</p>
+              </div>
+              <div class="feature-item">
+                <h4>🔧 Enhanced CLI</h4>
+                <p>All commands now support dynamic gas calculation with improved error handling</p>
+              </div>
+              <div class="feature-item">
+                <h4>🌐 Live Integration</h4>
+                <p>Real-time gas calculation during mining with live server connectivity</p>
+              </div>
+              <div class="feature-item">
+                <h4>📦 Complete Packages</h4>
+                <p>Ready-to-use packages for all platforms with automated installation</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proof Page -->
+    <div id="page-proof" class="page">
+      <div class="proof-section">
+        <h1>Critical Complex Equilibrium Proof</h1>
+        
+        <div class="proof-content">
+          <h2>Mathematical Foundation</h2>
+          <div class="proof-document">
+            <h3>Critical_Complex_Equilibrium_Proof.pdf</h3>
+            <p>Complete mathematical proof of COINjecture's equilibrium properties and computational work validation.</p>
+            <ul>
+              <li>✅ Equilibrium Analysis</li>
+              <li>✅ Computational Work Proof</li>
+              <li>✅ Mathematical Rigor</li>
+              <li>✅ Peer Review Ready</li>
+              <li>✅ Academic Standard</li>
+            </ul>
+            <div class="proof-links">
+              <a href="https://coinjecture.com/Critical_Complex_Equilibrium_Proof.pdf" class="proof-link">📄 View Proof (PDF)</a>
+              <a href="https://coinjecture.com/Critical_Complex_Equilibrium_Proof.pdf" class="proof-link">🔗 Direct S3 Link</a>
+            </div>
+          </div>
+          
+          <div class="proof-overview">
+            <h2>Proof Overview</h2>
+            <p>This comprehensive mathematical proof establishes the theoretical foundation for COINjecture's blockchain architecture, demonstrating:</p>
+            <ul>
+              <li><strong>Equilibrium Properties:</strong> Mathematical proof of system stability</li>
+              <li><strong>Computational Work:</strong> Validation of NP-Complete problem solving</li>
+              <li><strong>Economic Incentives:</strong> Proof of work reward mechanisms</li>
+              <li><strong>Network Security:</strong> Cryptographic security guarantees</li>
+            </ul>
+          </div>
+          
+          <div class="proof-section">
+            <h2>Academic Standards</h2>
+            <div class="academic-info">
+              <p>This proof follows rigorous mathematical standards and is suitable for:</p>
+              <ul>
+                <li>Academic peer review</li>
+                <li>Cryptocurrency research</li>
+                <li>Blockchain protocol analysis</li>
+                <li>Mathematical verification</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blockchain Explorer Metrics Page -->
+    <div id="page-metrics" class="page">
+      <div class="metrics-dashboard">
+        <h1>🔍 COINjecture Blockchain Explorer</h1>
+        <div class="metrics-subtitle">Real-time blockchain statistics, network health, and transaction data</div>
+        
+        <!-- Blockchain Overview -->
+        <div class="blockchain-overview">
+          <div class="overview-card">
+            <div class="overview-header">Blockchain Status</div>
+            <div class="overview-content">
+              <div class="overview-item">
+                <span class="label">Validated Blocks:</span>
+                <span class="value" id="validated-blocks">0</span>
+              </div>
+              <div class="overview-item">
+                <span class="label">Latest Block:</span>
+                <span class="value" id="latest-block">0</span>
+              </div>
+              <div class="overview-item">
+                <span class="label">Latest Hash:</span>
+                <span class="value" id="latest-hash">N/A</span>
+              </div>
+              <div class="overview-item">
+                <span class="label">Consensus:</span>
+                <span class="value" id="consensus-status">Active</span>
+              </div>
+              <div class="overview-item">
+                <span class="label">Mining Attempts:</span>
+                <span class="value" id="mining-attempts">0</span>
+              </div>
+              <div class="overview-item">
+                <span class="label">Success Rate:</span>
+                <span class="value" id="success-rate">0%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Consensus Equilibrium Metrics -->
+        <div class="consensus-equilibrium">
+          <div class="equilibrium-card">
+            <div class="equilibrium-header">⚖️ Consensus Equilibrium (Satoshi Constant)</div>
+            <div class="equilibrium-content">
+              <div class="equilibrium-item">
+                <span class="label">Satoshi Constant (λ=η):</span>
+                <span class="value" id="satoshi-constant">0.707107</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Damping Ratio (η):</span>
+                <span class="value" id="damping-ratio">0.707107</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Coupling Strength (λ):</span>
+                <span class="value" id="coupling-strength">0.707107</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Stability Metric:</span>
+                <span class="value" id="stability-metric">1.000000</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Fork Resistance:</span>
+                <span class="value" id="fork-resistance">0.292893</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Liveness Guarantee:</span>
+                <span class="value" id="liveness-guarantee">0.707107</span>
+              </div>
+              <div class="equilibrium-item">
+                <span class="label">Nash Equilibrium:</span>
+                <span class="value" id="nash-equilibrium">✅ Optimal</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="proof-of-work-card">
+            <div class="pow-header">🔐 Proof of Work (Commitment Scheme)</div>
+            <div class="pow-content">
+              <div class="pow-item">
+                <span class="label">Commitment Formula:</span>
+                <span class="value" id="commitment-formula">H(problem_params || miner_salt || epoch_salt || H(solution))</span>
+              </div>
+              <div class="pow-item">
+                <span class="label">Anti-Grinding:</span>
+                <span class="value" id="anti-grinding">✅ Enabled</span>
+              </div>
+              <div class="pow-item">
+                <span class="label">Cryptographic Binding:</span>
+                <span class="value" id="cryptographic-binding">✅ Enabled</span>
+              </div>
+              <div class="pow-item">
+                <span class="label">Hiding Property:</span>
+                <span class="value" id="hiding-property">✅ Enabled</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="metrics-grid">
+          <!-- TPS Card -->
+          <div class="metric-card">
+            <div class="metric-header">Transactions Per Second</div>
+            <div class="metric-value" id="tps-current">0</div>
+            <div class="metric-trend" id="tps-trend">→</div>
+            <div class="metric-details">
+              <span>1min: <span id="tps-1min">0</span></span>
+              <span>5min: <span id="tps-5min">0</span></span>
+              <span>1hr: <span id="tps-1hr">0</span></span>
+              <span>24hr: <span id="tps-24hr">0</span></span>
+            </div>
+          </div>
+          
+          <!-- Block Time Card -->
+          <div class="metric-card">
+            <div class="metric-header">Block Time</div>
+            <div class="metric-value" id="block-time-current">0</div>
+            <div class="metric-trend" id="block-time-trend">→</div>
+            <div class="metric-details">
+              <span>Avg: <span id="block-time-avg">0</span>s</span>
+              <span>Median: <span id="block-time-median">0</span>s</span>
+              <span>Last 100: <span id="block-time-100">0</span>s</span>
+            </div>
+          </div>
+          
+          <!-- Hash Rate Card -->
+          <div class="metric-card">
+            <div class="metric-header">Network Hash Rate</div>
+            <div class="metric-value" id="hash-rate-current">0</div>
+            <div class="metric-trend" id="hash-rate-trend">→</div>
+            <div class="metric-details">
+              <span>Current: <span id="hash-rate-1min">0</span> H/s</span>
+              <span>5min: <span id="hash-rate-5min">0</span> H/s</span>
+              <span>1hr: <span id="hash-rate-1hr">0</span> H/s</span>
+            </div>
+          </div>
+          
+          <!-- Network Card -->
+          <div class="metric-card">
+            <div class="metric-header">Network Status</div>
+            <div class="metric-value" id="network-peers">0</div>
+            <div class="metric-trend" id="network-trend">→</div>
+            <div class="metric-details">
+              <span>Peers: <span id="network-peers-count">0</span></span>
+              <span>Miners: <span id="network-miners">0</span></span>
+              <span>Difficulty: <span id="network-difficulty">0</span></span>
+            </div>
+          </div>
+          
+          <!-- Rewards Card -->
+          <div class="metric-card">
+            <div class="metric-header">Total Rewards</div>
+            <div class="metric-value" id="rewards-total">0</div>
+            <div class="metric-trend" id="rewards-trend">→</div>
+            <div class="metric-details">
+              <span>Distributed: <span id="rewards-distributed">0</span> BEANS</span>
+              <span>Unit: <span id="rewards-unit">BEANS</span></span>
+            </div>
+          </div>
+          
+          <!-- Efficiency Card -->
+          <div class="metric-card">
+            <div class="metric-header">Computational Efficiency</div>
+            <div class="metric-value" id="efficiency-current">0</div>
+            <div class="metric-trend" id="efficiency-trend">→</div>
+            <div class="metric-details">
+              <span>Solved 1h: <span id="efficiency-solved">0</span></span>
+              <span>Work Score: <span id="efficiency-work">0</span></span>
+              <span>Ratio: <span id="efficiency-ratio">0</span></span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Recent Transactions -->
+        <div class="recent-transactions">
+          <h3>📋 Recent Transactions (Last 10 Blocks)</h3>
+          <div class="transactions-table">
+            <div class="transaction-header">
+              <span>Block</span>
+              <span>Hash</span>
+              <span>Miner</span>
+              <span>Work Score</span>
+              <span>Capacity</span>
+            </div>
+            <div id="transactions-list">
+              <!-- Transactions will be populated by JavaScript -->
+            </div>
+          </div>
+        </div>
+        
+        <div class="metrics-footer">
+          <div class="last-updated">Last updated: <span id="last-updated">Loading...</span></div>
+          <div class="refresh-info">Auto-refresh every 15 seconds</div>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+    <script src="./app.js?v=6.6.0&t=1761451000"></script>
+</body>
+</html>
