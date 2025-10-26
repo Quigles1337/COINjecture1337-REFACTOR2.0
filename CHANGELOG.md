@@ -1,5 +1,72 @@
 # Changelog
 
+## [3.13.16] - 2025-01-26 - 🚧 CHALLENGES: CID Migration and API Data Flow Issues
+
+### 🚨 **CRITICAL CHALLENGES IDENTIFIED**
+
+#### **Problem 1: API Data Flow Mismatch**
+- **Issue**: API serves real-time data from external miners instead of converted database blocks
+- **Root Cause**: External miners still use old CID format (regular base58 with '0' characters)
+- **Impact**: Frontend continues to show "Non-base58btc character" errors despite database migration
+- **Status**: Continuous migration service running but API bypasses converted data
+
+#### **Problem 2: Storage Module Data Format Issues**
+- **Issue**: `blockchain_storage.py` expects BLOB data but database stores TEXT
+- **Error**: `'str' object has no attribute 'decode'` in API endpoints
+- **Impact**: 500 errors in `/v1/metrics/dashboard` and other endpoints
+- **Status**: Identified but not yet fixed
+
+#### **Problem 3: Database Query Mismatches**
+- **Issue**: `get_latest_height()` queries `headers` table instead of `blocks` table
+- **Impact**: API returns incorrect latest block information
+- **Status**: Identified in storage module analysis
+
+### 🔧 **TECHNICAL IMPROVEMENTS COMPLETED**
+- **Continuous Migration Service**: Created and deployed systemd service to convert new blocks
+- **Database Migration**: Successfully converted 1,096+ blocks from regular base58 to base58btc
+- **Backend CID Generation**: Updated blockchain.py and cli.py to use base58.BITCOIN_ALPHABET
+- **Migration Logging**: Comprehensive logging system for tracking conversions
+
+### 📊 **MIGRATION RESULTS**
+- **Total Blocks Processed**: 11,359 blocks
+- **Successfully Migrated**: 1,096+ blocks with '0' characters converted to base58btc
+- **Continuous Service**: Running and converting new blocks as they arrive
+- **Database Status**: Contains converted CIDs but API serves external miner data
+
+### 🚧 **PENDING ISSUES**
+1. **API Data Source**: API must be configured to serve converted database blocks
+2. **Storage Module Fixes**: Resolve data format handling in blockchain_storage.py
+3. **Database Query Fixes**: Update queries to use correct tables
+4. **Frontend Integration**: Ensure frontend receives base58btc CIDs from API
+
+### 📋 **NEXT STEPS**
+- Fix storage module data format handling
+- Update database queries to use correct tables
+- Configure API to serve converted database data
+- Test frontend with proper base58btc CIDs
+- Verify end-to-end CID format consistency
+
+## [3.13.15] - 2025-01-26 - 🔧 FIX: CID Encoding and Database Migration
+
+### 🎯 **CRITICAL FIXES**
+- **Base58btc CID Encoding**: Fixed all CID generation to use proper base58btc encoding (excludes 0, O, I, l characters)
+- **Database Migration**: Successfully migrated 1,096 blocks from regular base58 to base58btc format
+- **Backend CID Generation**: Updated blockchain.py and cli.py to use base58.BITCOIN_ALPHABET for all new blocks
+- **API Storage Fix**: Resolved storage module issues causing 500 errors in metrics dashboard
+- **Frontend Compatibility**: Updated frontend CID validation to handle both base58 and base58btc formats
+
+### 🔧 **TECHNICAL IMPROVEMENTS**
+- **Storage Module Synergy**: Unified storage systems for consistent data access across all API endpoints
+- **Database Path Resolution**: Fixed production database path configuration in blockchain_storage.py
+- **CID Migration Script**: Created comprehensive migration tool to convert existing CIDs
+- **Service Restart**: Applied all changes to production services with proper restart procedures
+
+### 📊 **MIGRATION RESULTS**
+- **Total Blocks Processed**: 11,060 blocks
+- **Successfully Migrated**: 1,096 blocks with '0' characters converted to base58btc
+- **Already Correct**: 9,938 blocks were already in base58btc format
+- **Zero Errors**: All migrations completed without conversion or update errors
+
 ## [3.13.14] - 2025-01-25 - 🚀 RELEASE: Dynamic Gas Calculation System
 
 ### 🎯 **REVOLUTIONARY NEW FEATURES**
@@ -108,7 +175,7 @@
 - **Chain Regeneration from Genesis**: Successfully regenerated blockchain from original genesis block d1700c2681b75c1d22ed08285994c202d310ff25cf40851365ca6fea22011358
 - **Real Miner Network Integration**: Connected to actual network miners with real addresses (e.g., BEANS13c5b833b5c164f73313202e7de6feff6b05023c)
 - **Organic Growth Foundation**: Network now grows organically from genesis block with real computational work
-- **Network Connectivity**: Maintained connection to existing 16+ network peers while starting fresh from genesis
+- **Network Connectivity**: Maintained connection to existing 16 total connections with 3 active peers while starting fresh from genesis
 
 ### Network Architecture
 - **Genesis Block Foundation**: All nodes now start from our specific genesis block d1700c2681...
@@ -139,7 +206,7 @@
 ### Changed
 - Network ID clarified as `coinjecture-testnet-v1`
 - Updated commitment scheme: H(problem_params || miner_salt || epoch_salt || H(solution))
-- Reduced max_peers to 20 (appropriate for testnet with 16 current peers)
+- Reduced max_peers to 20 (appropriate for testnet with 3 active peers, 16 total connections)
 - Implemented actual token transfer to miner's wallet in consensus service
 
 ### Removed
