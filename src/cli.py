@@ -23,12 +23,42 @@ try:
     from .node import Node, NodeConfig, NodeRole, create_node, load_config
     from .user_submissions.aggregation import AggregationStrategy
 except ImportError:
-    from node import Node, NodeConfig, NodeRole, create_node, load_config
-    from user_submissions.aggregation import AggregationStrategy
+    try:
+        from node import Node, NodeConfig, NodeRole, create_node, load_config
+        from user_submissions.aggregation import AggregationStrategy
+    except ImportError:
+        # For standalone executable, create minimal stubs
+        class Node:
+            def __init__(self, *args, **kwargs):
+                pass
+        
+        class NodeConfig:
+            def __init__(self, *args, **kwargs):
+                pass
+        
+        class NodeRole:
+            MINER = "miner"
+            FULL = "full"
+            LIGHT = "light"
+            ARCHIVE = "archive"
+        
+        def create_node(*args, **kwargs):
+            return Node()
+        
+        def load_config(*args, **kwargs):
+            return NodeConfig()
+        
+        class AggregationStrategy:
+            ANY = "ANY"
+            BEST = "BEST"
+            MULTIPLE = "MULTIPLE"
+            STATISTICAL = "STATISTICAL"
 
 
 class COINjectureCLI:
     """COINjecture Command Line Interface."""
+    
+    VERSION = "3.15.0"
     
     def __init__(self):
         self.parser = self._create_parser()
@@ -171,6 +201,9 @@ Examples:
         self._add_rewards_command(subparsers)
         self._add_leaderboard_command(subparsers)
         self._add_mining_rewards_command(subparsers)
+        
+        # Version command
+        self._add_version_command(subparsers)
         
         return parser
     
@@ -2296,19 +2329,14 @@ Examples:
             'mining-rewards',
             help='Show mining rewards and transaction history'
         )
-        parser.add_argument(
-            '--wallet',
-            type=str,
-            default='config/miner_wallet.json',
-            help='Wallet file path (default: config/miner_wallet.json)'
+    
+    def _add_version_command(self, subparsers):
+        """Add version command parser."""
+        parser = subparsers.add_parser(
+            'version',
+            help='Show COINjecture version information'
         )
-        parser.add_argument(
-            '--limit',
-            type=int,
-            default=10,
-            help='Number of recent transactions to show (default: 10)'
-        )
-        parser.set_defaults(func=self._handle_mining_rewards)
+        parser.set_defaults(func=self._handle_version)
     
     def _handle_mining_rewards(self, args) -> int:
         """Handle mining-rewards command."""
@@ -2362,6 +2390,15 @@ Examples:
         except Exception as e:
             print(f"❌ Error checking mining rewards: {e}")
             return 1
+    
+    def _handle_version(self, args) -> int:
+        """Handle version command."""
+        print(f"COINjecture CLI v{self.VERSION}")
+        print(f"Blockchain: COINjecture Proof-of-Work")
+        print(f"Network: Testnet")
+        print(f"API URL: {self.faucet_api_url}")
+        print(f"IPFS URL: {self.ipfs_api_url}")
+        return 0
     
     def _handle_rewards(self, args) -> int:
         """Handle rewards command."""

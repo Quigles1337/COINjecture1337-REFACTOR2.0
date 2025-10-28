@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="updated" content="1761462000-v3.15.0">
+    <meta name="version" content="3.15.0">
+    <meta name="cache-buster" content="1761462000-v3.15.0">
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>COINjecture Metrics - $BEANS</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-text">COINjecture</span>
+                <span class="brand-subtitle">Blockchain Metrics</span>
+                <span class="brand-ticker">$BEANS</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Terminal</a>
+                <a href="/mining" class="nav-link">Mining</a>
+                <a href="/metrics" class="nav-link active">Metrics</a>
+                <a href="/explorer" class="nav-link">Explorer</a>
+                <a href="/download" class="nav-link">Download</a>
+                <a href="/proof" class="nav-link">Proof</a>
+                <a href="/api-docs" class="nav-link">API</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Blockchain Explorer Metrics Page -->
+        <div class="metrics-dashboard">
+            <h1>🔍 COINjecture Blockchain Explorer v3.15.0</h1>
+            <div class="metrics-subtitle">Real-time blockchain statistics with rich computational complexity data from IPFS</div>
+            
+            <!-- Metrics Navigation Tabs -->
+            <div class="metrics-nav">
+                <button class="metrics-tab active" data-tab="overview">📊 Overview</button>
+                <button class="metrics-tab" data-tab="live-feed">⚡ Live Feed</button>
+                <button class="metrics-tab" data-tab="block-data">📦 Block Data</button>
+                <button class="metrics-tab" data-tab="complexity">🧮 Complexity</button>
+            </div>
+            
+            <!-- Overview Tab Content -->
+            <div id="tab-overview" class="metrics-tab-content active">
+                <!-- Blockchain Overview -->
+                <div class="blockchain-overview">
+                <div class="overview-card">
+                    <div class="overview-header">Blockchain Status</div>
+                    <div class="overview-content">
+                        <div class="overview-item">
+                            <span class="label">Validated Blocks:</span>
+                            <span class="value" id="validated-blocks">0</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="label">Latest Block:</span>
+                            <span class="value" id="latest-block">0</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="label">Latest Hash:</span>
+                            <span class="value" id="latest-hash">N/A</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="label">Consensus:</span>
+                            <span class="value" id="consensus-status">Active</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="label">Mining Attempts:</span>
+                            <span class="value" id="mining-attempts">0</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="label">Success Rate:</span>
+                            <span class="value" id="success-rate">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Consensus Equilibrium Metrics -->
+            <div class="consensus-equilibrium">
+                <div class="equilibrium-card">
+                    <div class="equilibrium-header">⚖️ Consensus Equilibrium (Satoshi Constant)</div>
+                    <div class="equilibrium-content">
+                        <div class="equilibrium-item">
+                            <span class="label">Satoshi Constant (λ=η):</span>
+                            <span class="value" id="satoshi-constant">0.707107</span>
+                        </div>
+                        <div class="equilibrium-item">
+                            <span class="label">Damping Ratio (η):</span>
+                            <span class="value" id="damping-ratio">0.707107</span>
+                        </div>
+                        <div class="equilibrium-item">
+                            <span class="label">Coupling Strength (λ):</span>
+                            <span class="value" id="coupling-strength">0.707107</span>
+                        </div>
+                        <div class="equilibrium-item">
+                            <span class="label">Stability Metric:</span>
+                            <span class="value" id="stability-metric">1.000000</span>
+                        </div>
+                        <div class="equilibrium-item">
+                            <span class="label">Fork Resistance:</span>
+                            <span class="value" id="fork-resistance">0.292893</span>
+                        </div>
+                        <div class="equilibrium-item">
+                            <span class="label">Liveness Guarantee:</span>
+                            <span class="value" id="liveness-guarantee">0.707107</span>
+                        </div>
+                        <div class="equilibrium-item">
+                            <span class="label">Nash Equilibrium:</span>
+                            <span class="value" id="nash-equilibrium">✅ Optimal</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="proof-of-work-card">
+                    <div class="pow-header">🔐 Proof of Work (Commitment Scheme)</div>
+                    <div class="pow-content">
+                        <div class="pow-item">
+                            <span class="label">Commitment Formula:</span>
+                            <span class="value" id="commitment-formula">H(problem_params || miner_salt || epoch_salt || H(solution))</span>
+                        </div>
+                        <div class="pow-item">
+                            <span class="label">Anti-Grinding:</span>
+                            <span class="value" id="anti-grinding">✅ Enabled</span>
+                        </div>
+                        <div class="pow-item">
+                            <span class="label">Cryptographic Binding:</span>
+                            <span class="value" id="cryptographic-binding">✅ Enabled</span>
+                        </div>
+                        <div class="pow-item">
+                            <span class="label">Hiding Property:</span>
+                            <span class="value" id="hiding-property">✅ Enabled</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="metrics-grid">
+                <!-- TPS Card -->
+                <div class="metric-card">
+                    <div class="metric-header">Transactions Per Second</div>
+                    <div class="metric-value" id="tps-current">0</div>
+                    <div class="metric-trend" id="tps-trend">→</div>
+                    <div class="metric-details">
+                        <span>1min: <span id="tps-1min">0</span></span>
+                        <span>5min: <span id="tps-5min">0</span></span>
+                        <span>1hr: <span id="tps-1hr">0</span></span>
+                        <span>24hr: <span id="tps-24hr">0</span></span>
+                    </div>
+                </div>
+                
+                <!-- Block Time Card -->
+                <div class="metric-card">
+                    <div class="metric-header">Block Time</div>
+                    <div class="metric-value" id="block-time-current">0</div>
+                    <div class="metric-trend" id="block-time-trend">→</div>
+                    <div class="metric-details">
+                        <span>Avg: <span id="block-time-avg">0</span>s</span>
+                        <span>Median: <span id="block-time-median">0</span>s</span>
+                        <span>Last 100: <span id="block-time-100">0</span>s</span>
+                    </div>
+                </div>
+                
+                <!-- Hash Rate Card -->
+                <div class="metric-card">
+                    <div class="metric-header">Network Hash Rate</div>
+                    <div class="metric-value" id="hash-rate-current">0</div>
+                    <div class="metric-trend" id="hash-rate-trend">→</div>
+                    <div class="metric-details">
+                        <span>Current: <span id="hash-rate-1min">0</span> H/s</span>
+                        <span>5min: <span id="hash-rate-5min">0</span> H/s</span>
+                        <span>1hr: <span id="hash-rate-1hr">0</span> H/s</span>
+                    </div>
+                </div>
+                
+                <!-- Network Card -->
+                <div class="metric-card">
+                    <div class="metric-header">Network Status</div>
+                    <div class="metric-value" id="network-peers">0</div>
+                    <div class="metric-trend" id="network-trend">→</div>
+                    <div class="metric-details">
+                        <span>Peers: <span id="network-peers-count">0</span></span>
+                        <span>Miners: <span id="network-miners">0</span></span>
+                        <span>Difficulty: <span id="network-difficulty">0</span></span>
+                    </div>
+                </div>
+                
+                <!-- Rewards Card -->
+                <div class="metric-card">
+                    <div class="metric-header">Total Rewards</div>
+                    <div class="metric-value" id="rewards-total">0</div>
+                    <div class="metric-trend" id="rewards-trend">→</div>
+                    <div class="metric-details">
+                        <span>Distributed: <span id="rewards-distributed">0</span> BEANS</span>
+                        <span>Unit: <span id="rewards-unit">BEANS</span></span>
+                    </div>
+                </div>
+                
+                <!-- Efficiency Card -->
+                <div class="metric-card">
+                    <div class="metric-header">Computational Efficiency</div>
+                    <div class="metric-value" id="efficiency-current">0</div>
+                    <div class="metric-trend" id="efficiency-trend">→</div>
+                    <div class="metric-details">
+                        <span>Solved 1h: <span id="efficiency-solved">0</span></span>
+                        <span>Work Score: <span id="efficiency-work">0</span></span>
+                        <span>Ratio: <span id="efficiency-ratio">0</span></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Transactions -->
+            <div class="recent-transactions">
+                <h3>📋 Recent Transactions (Last 10 Blocks)</h3>
+                <div class="transactions-table">
+                    <div class="transaction-header">
+                        <span>Block</span>
+                        <span>Hash</span>
+                        <span>Miner</span>
+                        <span>Work Score</span>
+                        <span>Capacity</span>
+                    </div>
+                    <div id="transactions-list">
+                        <!-- Transactions will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            
+                <div class="metrics-footer">
+                    <div class="last-updated">Last updated: <span id="last-updated">Loading...</span></div>
+                    <div class="refresh-info">Auto-refresh every 15 seconds</div>
+                </div>
+            </div>
+
+            <!-- Live Feed Tab Content -->
+            <div id="tab-live-feed" class="metrics-tab-content">
+                <div class="live-feed-container">
+                    <h2>⚡ Real-Time Problem Solving Feed</h2>
+                    <div class="live-feed-subtitle">Watch problems being solved in real-time with computational complexity data</div>
+                    
+                    <div class="live-feed-stats">
+                        <div class="live-stat">
+                            <span class="stat-label">Problems Solved (Last Hour):</span>
+                            <span class="stat-value" id="problems-solved-hour">0</span>
+                        </div>
+                        <div class="live-stat">
+                            <span class="stat-label">Current TPS:</span>
+                            <span class="stat-value" id="live-tps">0</span>
+                        </div>
+                        <div class="live-stat">
+                            <span class="stat-label">Active Miners:</span>
+                            <span class="stat-value" id="live-miners">0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="live-feed-stream">
+                        <div class="feed-header">
+                            <h3>🔴 Live Problem Solving Stream</h3>
+                            <div class="feed-controls">
+                                <button id="pause-feed" class="feed-btn">⏸️ Pause</button>
+                                <button id="clear-feed" class="feed-btn">🗑️ Clear</button>
+                            </div>
+                        </div>
+                        <div id="live-feed-list" class="feed-list">
+                            <!-- Live feed items will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Block Data Tab Content -->
+            <div id="tab-block-data" class="metrics-tab-content">
+                <div class="block-data-container">
+                    <h2>📦 Complete Block Data Explorer</h2>
+                    <div class="block-data-subtitle">Explore all block data including IPFS proof bundles and computational complexity</div>
+                    
+                    <div class="block-data-controls">
+                        <div class="block-search">
+                            <input type="number" id="block-search-input" placeholder="Enter block number..." min="0">
+                            <button id="search-block-btn">🔍 Search</button>
+                        </div>
+                        <div class="block-range">
+                            <label>Show blocks:</label>
+                            <select id="block-range-select">
+                                <option value="10">Last 10 blocks</option>
+                                <option value="25">Last 25 blocks</option>
+                                <option value="50">Last 50 blocks</option>
+                                <option value="100">Last 100 blocks</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="block-data-grid" id="block-data-grid">
+                        <!-- Block data cards will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Complexity Tab Content -->
+            <div id="tab-complexity" class="metrics-tab-content">
+                <div class="complexity-container">
+                    <h2>🧮 Computational Complexity Analysis</h2>
+                    <div class="complexity-subtitle">Rich computational complexity data from IPFS proof bundles</div>
+                    
+                    <div class="complexity-overview">
+                        <div class="complexity-card">
+                            <h3>📊 Problem Complexity Distribution</h3>
+                            <div class="complexity-stats">
+                                <div class="complexity-stat">
+                                    <span class="stat-label">Average Problem Size:</span>
+                                    <span class="stat-value" id="avg-problem-size">0</span>
+                                </div>
+                                <div class="complexity-stat">
+                                    <span class="stat-label">Average Solve Time:</span>
+                                    <span class="stat-value" id="avg-solve-time">0ms</span>
+                                </div>
+                                <div class="complexity-stat">
+                                    <span class="stat-label">Average Verify Time:</span>
+                                    <span class="stat-value" id="avg-verify-time">0ms</span>
+                                </div>
+                                <div class="complexity-stat">
+                                    <span class="stat-label">Time Asymmetry:</span>
+                                    <span class="stat-value" id="time-asymmetry">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="complexity-card">
+                            <h3>⚡ Energy Consumption Analysis</h3>
+                            <div class="energy-stats">
+                                <div class="energy-stat">
+                                    <span class="stat-label">Total Energy Used:</span>
+                                    <span class="stat-value" id="total-energy">0 J</span>
+                                </div>
+                                <div class="energy-stat">
+                                    <span class="stat-label">Average Power:</span>
+                                    <span class="stat-value" id="avg-power">0 W</span>
+                                </div>
+                                <div class="energy-stat">
+                                    <span class="stat-label">CPU Utilization:</span>
+                                    <span class="stat-value" id="avg-cpu">0%</span>
+                                </div>
+                                <div class="energy-stat">
+                                    <span class="stat-label">Memory Utilization:</span>
+                                    <span class="stat-value" id="avg-memory">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="complexity-charts">
+                        <div class="chart-container">
+                            <h3>📈 Problem Size Distribution</h3>
+                            <div id="problem-size-chart" class="chart"></div>
+                        </div>
+                        <div class="chart-container">
+                            <h3>⏱️ Solve Time vs Problem Size</h3>
+                            <div id="solve-time-chart" class="chart"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="complexity-details">
+                        <h3>🔍 Detailed Complexity Metrics</h3>
+                        <div id="complexity-details-list" class="complexity-list">
+                            <!-- Detailed complexity data will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script type="module" src="./js/ui/metrics.js?v=3.15.0&t=1761462000"></script>
+    <script type="module">
+        import { metricsDashboard } from './js/ui/metrics.js';
+        
+        // Initialize metrics dashboard when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            metricsDashboard.activate();
+        });
+    </script>
+</body>
+</html>

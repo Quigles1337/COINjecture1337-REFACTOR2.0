@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="updated" content="1761462000-v3.15.0">
+    <meta name="version" content="3.15.0">
+    <meta name="cache-buster" content="1761462000-v3.15.0">
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>COINjecture API Docs - $BEANS</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-text">COINjecture</span>
+                <span class="brand-subtitle">API Documentation</span>
+                <span class="brand-ticker">$BEANS</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Terminal</a>
+                <a href="/mining" class="nav-link">Mining</a>
+                <a href="/metrics" class="nav-link">Metrics</a>
+                <a href="/explorer" class="nav-link">Explorer</a>
+                <a href="/download" class="nav-link">Download</a>
+                <a href="/proof" class="nav-link">Proof</a>
+                <a href="/api-docs" class="nav-link active">API</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- API Documentation Page -->
+        <div class="api-docs">
+            <h1>API Documentation</h1>
+            
+            <div class="api-section">
+                <h2>🚀 API Endpoints v3.15.0 - Dynamic Gas Calculation</h2>
+                <div class="consolidation-badge">
+                    <span class="badge-text">✨ NEW: Dynamic Gas</span>
+                    <span class="badge-subtitle">IPFS-based gas calculation (38K-600K+ gas)</span>
+                </div>
+                <div class="endpoint-list">
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/v1/metrics/dashboard</span>
+                        <span class="description">Comprehensive blockchain metrics with dynamic gas data</span>
+                    </div>
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/v1/data/block/latest</span>
+                        <span class="description">Latest block with dynamic gas calculation</span>
+                    </div>
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/v1/rewards/{address}</span>
+                        <span class="description">User rewards & wallet data with gas integration</span>
+                    </div>
+                    <div class="endpoint">
+                        <span class="method">POST</span>
+                        <span class="path">/v1/ingest/block</span>
+                        <span class="description">Submit blocks with IPFS-based gas calculation</span>
+                    </div>
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/health</span>
+                        <span class="description">API health check</span>
+                    </div>
+                </div>
+                
+                <div class="api-info">
+                    <h3>Base URL</h3>
+                    <code>https://api.coinjecture.com</code>
+                    <p class="api-note">✨ Live server with dynamic gas calculation system</p>
+                </div>
+                
+                <div class="api-test">
+                    <h3>Test API</h3>
+                    <button id="test-api-btn" class="test-btn">Test Connection</button>
+                    <div id="api-test-result"></div>
+                </div>
+            </div>
+            
+            <div class="api-section">
+                <h2>API Categories</h2>
+                <div class="api-categories">
+                    <div class="category">
+                        <h3>🔗 Blockchain Data</h3>
+                        <ul>
+                            <li><code>GET /v1/data/block/latest</code> - Latest block</li>
+                            <li><code>GET /v1/data/block/{index}</code> - Block by index</li>
+                            <li><code>GET /v1/peers</code> - Network peers</li>
+                            <li><code>GET /v1/consensus/status</code> - Consensus status</li>
+                        </ul>
+                    </div>
+                    <div class="category">
+                        <h3>⛏️ Mining & Rewards</h3>
+                        <ul>
+                            <li><code>POST /v1/ingest/block</code> - Submit mining block</li>
+                            <li><code>GET /v1/rewards/{address}</code> - Get rewards</li>
+                            <li><code>GET /v1/rewards/leaderboard</code> - Leaderboard</li>
+                        </ul>
+                    </div>
+                    <div class="category">
+                        <h3>🔐 Wallet Management</h3>
+                        <ul>
+                            <li><code>POST /v1/wallet/register</code> - Register wallet</li>
+                            <li><code>POST /v1/wallet/verify</code> - Verify wallet</li>
+                        </ul>
+                    </div>
+                    <div class="category">
+                        <h3>📦 IPFS Data</h3>
+                        <ul>
+                            <li><code>GET /v1/ipfs/user/{address}</code> - User IPFS data</li>
+                            <li><code>GET /v1/ipfs/stats/{address}</code> - IPFS statistics</li>
+                            <li><code>GET /v1/ipfs/download/{address}</code> - Download data</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="api-section">
+                <h2>Rate Limits</h2>
+                <div class="rate-limits">
+                    <div class="rate-limit">
+                        <span class="endpoint">/v1/ingest/block</span>
+                        <span class="limit">60 requests/minute</span>
+                    </div>
+                    <div class="rate-limit">
+                        <span class="endpoint">/v1/wallet/register</span>
+                        <span class="limit">10 requests/minute</span>
+                    </div>
+                    <div class="rate-limit">
+                        <span class="endpoint">/v1/ipfs/download</span>
+                        <span class="limit">10 requests/minute</span>
+                    </div>
+                    <div class="rate-limit">
+                        <span class="endpoint">All other endpoints</span>
+                        <span class="limit">100 requests/minute</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed API Reference -->
+            <div class="api-section">
+                <h2>📖 Detailed API Reference</h2>
+                
+                <div class="api-endpoint-detail">
+                    <h3>GET /v1/metrics/dashboard</h3>
+                    <p>Retrieve comprehensive blockchain metrics including consensus data, network statistics, and computational complexity metrics.</p>
+                    
+                    <h4>Response Example:</h4>
+                    <pre class="code-block">{
+  "status": "success",
+  "data": {
+    "blockchain": {
+      "validated_blocks": 8763,
+      "latest_block": 8763,
+      "latest_hash": "abc123...",
+      "consensus_active": true,
+      "mining_attempts": 125000,
+      "success_rate": 95.2
+    },
+    "consensus": {
+      "equilibrium_proof": {
+        "satoshi_constant": 0.707107,
+        "damping_ratio": 0.707107,
+        "coupling_strength": 0.707107,
+        "stability_metric": 1.000000,
+        "fork_resistance": 0.292893,
+        "liveness_guarantee": 0.707107,
+        "nash_equilibrium": true
+      },
+      "proof_of_work": {
+        "commitment_scheme": "H(problem_params || miner_salt || epoch_salt || H(solution))",
+        "anti_grinding": true,
+        "cryptographic_binding": true,
+        "hiding_property": true
+      }
+    },
+    "transactions": {
+      "tps_current": 2.5,
+      "tps_1min": 2.3,
+      "tps_5min": 2.1,
+      "tps_1hour": 1.8,
+      "tps_24hour": 1.5,
+      "trend": "↑"
+    },
+    "hash_rate": {
+      "current_hs": 1250000,
+      "5min_hs": 1200000,
+      "1hour_hs": 1150000,
+      "trend": "↑"
+    },
+    "network": {
+      "peers": 45,
+      "miners": 23,
+      "difficulty": 1.2
+    }
+  }
+}</pre>
+                </div>
+
+                <div class="api-endpoint-detail">
+                    <h3>POST /v1/ingest/block</h3>
+                    <p>Submit a new mining block to the blockchain network.</p>
+                    
+                    <h4>Request Body:</h4>
+                    <pre class="code-block">{
+  "index": 8764,
+  "timestamp": 1703123456789,
+  "previous_hash": "abc123...",
+  "miner": "addr_1234567890abcdef",
+  "problem": {
+    "numbers": [15, 23, 8, 42, 17, 31, 9, 25, 38, 12],
+    "target": 100,
+    "size": 10,
+    "timestamp": 1703123456789,
+    "device": "mobile"
+  },
+  "solution": {
+    "success": true,
+    "solution": {
+      "indices": [0, 2, 4, 7],
+      "numbers": [15, 8, 17, 25],
+      "sum": 65,
+      "method": "dp"
+    },
+    "solve_time": 1250,
+    "work_score": 45,
+    "method": "dp",
+    "timestamp": 1703123456789
+  },
+  "work_score": 45,
+  "nonce": 12345,
+  "difficulty": 1.2
+}</pre>
+                    
+                    <h4>Response Example:</h4>
+                    <pre class="code-block">{
+  "status": "success",
+  "message": "Block accepted",
+  "data": {
+    "block_index": 8764,
+    "hash": "def456...",
+    "work_score": 45,
+    "gas_used": 125000,
+    "reward": 10.5
+  }
+}</pre>
+                </div>
+
+                <div class="api-endpoint-detail">
+                    <h3>GET /v1/rewards/{address}</h3>
+                    <p>Get mining rewards and statistics for a specific wallet address.</p>
+                    
+                    <h4>Response Example:</h4>
+                    <pre class="code-block">{
+  "status": "success",
+  "data": {
+    "address": "addr_1234567890abcdef",
+    "total_rewards": 1250.75,
+    "blocks_mined": 45,
+    "total_work_score": 2250,
+    "average_work_score": 50.0,
+    "first_mine": "2024-01-15T10:30:00Z",
+    "last_mine": "2024-01-20T15:45:00Z",
+    "mining_efficiency": 0.85,
+    "rank": 12
+  }
+}</pre>
+                </div>
+            </div>
+
+            <!-- SDK and Libraries -->
+            <div class="api-section">
+                <h2>🛠️ SDK and Libraries</h2>
+                <div class="sdk-grid">
+                    <div class="sdk-card">
+                        <h3>JavaScript/TypeScript</h3>
+                        <div class="sdk-content">
+                            <p>Official JavaScript SDK for web and Node.js applications.</p>
+                            <div class="sdk-install">
+                                <code>npm install @coinjecture/sdk</code>
+                            </div>
+                            <div class="sdk-example">
+                                <h4>Example Usage:</h4>
+                                <pre>import { COINjectureAPI } from '@coinjecture/sdk';
+
+const api = new COINjectureAPI('https://api.coinjecture.com');
+
+// Get metrics
+const metrics = await api.getMetricsDashboard();
+
+// Submit mining block
+const result = await api.submitMiningBlock(blockData);</pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="sdk-card">
+                        <h3>Python</h3>
+                        <div class="sdk-content">
+                            <p>Python SDK for backend services and data analysis.</p>
+                            <div class="sdk-install">
+                                <code>pip install coinjecture-sdk</code>
+                            </div>
+                            <div class="sdk-example">
+                                <h4>Example Usage:</h4>
+                                <pre>from coinjecture import COINjectureAPI
+
+api = COINjectureAPI('https://api.coinjecture.com')
+
+# Get metrics
+metrics = api.get_metrics_dashboard()
+
+# Submit mining block
+result = api.submit_mining_block(block_data)</pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="sdk-card">
+                        <h3>cURL Examples</h3>
+                        <div class="sdk-content">
+                            <p>Direct HTTP API calls using cURL.</p>
+                            <div class="sdk-example">
+                                <h4>Get Metrics:</h4>
+                                <pre>curl -X GET "https://api.coinjecture.com/v1/metrics/dashboard" \
+  -H "Accept: application/json"</pre>
+                                
+                                <h4>Submit Block:</h4>
+                                <pre>curl -X POST "https://api.coinjecture.com/v1/ingest/block" \
+  -H "Content-Type: application/json" \
+  -d '{"index": 8764, "miner": "addr_123...", ...}'</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Handling -->
+            <div class="api-section">
+                <h2>⚠️ Error Handling</h2>
+                <div class="error-handling">
+                    <div class="error-section">
+                        <h3>HTTP Status Codes</h3>
+                        <ul>
+                            <li><code>200 OK</code> - Request successful</li>
+                            <li><code>400 Bad Request</code> - Invalid request parameters</li>
+                            <li><code>401 Unauthorized</code> - Authentication required</li>
+                            <li><code>403 Forbidden</code> - Access denied</li>
+                            <li><code>404 Not Found</code> - Resource not found</li>
+                            <li><code>429 Too Many Requests</code> - Rate limit exceeded</li>
+                            <li><code>500 Internal Server Error</code> - Server error</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="error-section">
+                        <h3>Error Response Format</h3>
+                        <pre class="code-block">{
+  "status": "error",
+  "error": {
+    "code": "INVALID_BLOCK",
+    "message": "Block validation failed",
+    "details": {
+      "field": "work_score",
+      "reason": "Work score too low"
+    }
+  },
+  "timestamp": "2024-01-20T15:45:00Z"
+}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script type="module">
+        import { api } from './js/core/api.js';
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const testBtn = document.getElementById('test-api-btn');
+            const testResult = document.getElementById('api-test-result');
+            
+            if (testBtn && testResult) {
+                testBtn.addEventListener('click', async () => {
+                    testBtn.disabled = true;
+                    testBtn.textContent = 'Testing...';
+                    testResult.innerHTML = '';
+                    
+                    try {
+                        const health = await api.healthCheck();
+                        testResult.innerHTML = `
+                            <div class="test-result success">
+                                ✅ API Connection Successful<br>
+                                Status: ${health.status || 'OK'}<br>
+                                Timestamp: ${new Date().toLocaleString()}
+                            </div>
+                        `;
+                    } catch (error) {
+                        testResult.innerHTML = `
+                            <div class="test-result error">
+                                ❌ API Connection Failed<br>
+                                Error: ${error.message}<br>
+                                Timestamp: ${new Date().toLocaleString()}
+                            </div>
+                        `;
+                    } finally {
+                        testBtn.disabled = false;
+                        testBtn.textContent = 'Test Connection';
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

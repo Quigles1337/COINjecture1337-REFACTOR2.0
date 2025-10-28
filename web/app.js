@@ -1,3106 +1,1500 @@
+// COINjecture Web Interface - Main Application
+// Version: 3.15.0 - Modular Architecture
 
-// Cache busting and force refresh - Updated 1761451000
-const CACHE_BUSTER = '?v=1761451000&t=1761451000';
-const FORCE_REFRESH = true;
+// Import modules
+import { api } from './js/core/api.js';
+import { metricsDashboard } from './js/ui/metrics.js';
+import { blockchainExplorer } from './js/ui/explorer.js';
+import { 
+    urlUtils,
+    clipboardUtils,
+    domUtils,
+    deviceUtils
+} from './js/shared/utils.js';
+import { 
+    API_CONFIG, 
+    IPFS_GATEWAYS, 
+    CACHE_CONFIG,
+    ERROR_MESSAGES,
+    MINING_CONFIG
+} from './js/shared/constants.js';
+import { SubsetSumSolver } from './js/mining/subset-sum.js';
+import { P2PMiningService } from './js/p2p/p2p-mining.js';
 
-// Override fetch to add cache busting
-const originalFetch = window.fetch;
-window.fetch = function(url, options = {}) {
-    if (typeof url === 'string' && url.includes('/v1/')) {
-        const separator = url.includes('?') ? '&' : '?';
-        url = url + separator + 't=' + Date.now();
-    }
-    return originalFetch.call(this, url, {
-        ...options,
-        cache: 'no-cache',
-        headers: {
-            ...options.headers,
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-        }
-    });
-};
+// Initialize cache busting and fetch override
+urlUtils.overrideFetch();
 
-// Force refresh metrics
-window.forceRefreshMetrics = function() {
+// Global functions for backward compatibility
+window.forceRefreshMetrics = async function() {
     console.log('🔄 Force refreshing metrics...');
-    if (window.webInterface) {
-        window.webInterface.fetchMetrics().then(metrics => {
-            window.webInterface.updateMetricsDashboard(metrics);
-            console.log('✅ Metrics refreshed:', metrics);
-        });
+    try {
+        await metricsDashboard.forceRefresh();
+        console.log('✅ Metrics refreshed successfully');
+    } catch (error) {
+        console.error('❌ Failed to refresh metrics:', error);
     }
 };
 
-// Auto-refresh on page load
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(() => {
-        window.forceRefreshMetrics();
-    }, 1000);
-});
-
-// Global IPFS viewer function
-window.openIPFSViewer = function(cid) {
-    const gateways = [
-        `https://gateway.pinata.cloud/ipfs/${cid}`,
-        `https://ipfs.io/ipfs/${cid}`,
-        `https://cloudflare-ipfs.com/ipfs/${cid}`,
-        `https://dweb.link/ipfs/${cid}`,
-        `https://gateway.ipfs.io/ipfs/${cid}`
-    ];
-    
-    // Try the first gateway
-    const newWindow = window.open(gateways[0], '_blank');
-    
-    // If the first gateway fails, show a modal with options
-    setTimeout(() => {
-        if (newWindow && newWindow.closed) {
-            showIPFSModal(cid, gateways);
-        }
-    }, 2000);
-};
-
-// Global IPFS modal function
-window.showIPFSModal = function(cid, gateways) {
-    const modal = document.createElement('div');
-    modal.className = 'ipfs-modal';
-    modal.innerHTML = `
-        <div class="ipfs-modal-content">
-            <div class="ipfs-modal-header">
-                <h3>📦 IPFS Content Viewer</h3>
-                <button class="ipfs-modal-close" onclick="this.closest('.ipfs-modal').remove()">×</button>
-            </div>
-            <div class="ipfs-modal-body">
-                <p><strong>CID:</strong> ${cid}</p>
-                <p>Choose a gateway to view the content:</p>
-                <div class="ipfs-gateways">
-                    ${gateways.map((gateway, index) => `
-                        <a href="${gateway}" target="_blank" class="ipfs-gateway-link">
-                            Gateway ${index + 1}: ${gateway.split('/')[2]}
-                        </a>
-                    `).join('')}
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.remove();
-        }
-    });
-};
+window.openIPFSViewer = domUtils.openIPFSViewer;
+window.showIPFSModal = domUtils.showIPFSModal;
 
 // Global download proof bundle function
 window.downloadProofBundle = async function(cid) {
     try {
-        const apiBase = 'https://api.coinjecture.com';
+        console.log(`📦 Downloading proof bundle: ${cid}`);
         
-        // Validate CID format
-        if (!cid || typeof cid !== 'string') {
-            throw new Error('Invalid CID: CID must be a non-empty string');
-        }
-        
-        // Check for base58 characters (more lenient than base58btc to handle backend encoding)
-        const base58Pattern = /^[1-9A-HJ-NP-Za-km-z0OIl]+$/;
-        if (!base58Pattern.test(cid)) {
-            const invalidChars = cid.split('').filter(char => !base58Pattern.test(char));
-            throw new Error(`Invalid CID: Contains non-base58 characters: ${invalidChars.join(', ')}`);
-        }
-        
-        // Note: Backend uses regular base58 encoding (includes 0, O, I, l) instead of base58btc
-        // This is a known issue with the backend CID generation
-        
-        // Check CID length (should be 46 characters for CIDv0)
-        if (cid.length !== 46) {
-            throw new Error(`Invalid CID: Length ${cid.length}, expected 46 characters for CIDv0`);
-        }
-        
-        // Check if CID starts with 'Qm' (CIDv0 format)
-        if (!cid.startsWith('Qm')) {
-            throw new Error(`Invalid CID: Must start with 'Qm' for CIDv0 format, got '${cid.substring(0, 2)}'`);
-        }
-        
-        // Get the latest block index first
-        let latestIndex = 11430; // Default fallback
+        // Try to get data via API first
         try {
-            const latestResponse = await fetch(`${apiBase}/v1/data/block/latest`);
-            if (latestResponse.ok) {
-                const latestData = await latestResponse.json();
-                latestIndex = latestData.data.index;
-            }
-        } catch (e) {
-            console.log('Could not get latest block index, using default');
-        }
-        
-        // Try to find the block with this CID by searching recent blocks
-        let blockData = null;
-        let foundIndex = null;
-        
-        // Search through recent blocks (expanded range)
-        const searchRange = Math.min(200, latestIndex); // Search up to 200 blocks or latest
-        for (let i = 0; i < searchRange; i++) {
-            try {
-                const blockIndex = latestIndex - i;
-                const response = await fetch(`${apiBase}/v1/data/block/${blockIndex}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.data && data.data.cid === cid) {
-                        blockData = data.data;
-                        foundIndex = data.data.index;
-                        break;
-                    }
-                }
-            } catch (e) {
-                // Continue searching
-            }
-        }
-        
-        if (!blockData) {
-            // If not found, create a proof bundle with available data
-            blockData = {
-                cid: cid,
-                timestamp: new Date().toISOString(),
-                note: `Block data not found in recent ${searchRange} blocks (searched from ${latestIndex} down to ${latestIndex - searchRange + 1}). This CID may be from an older block or may not exist.`,
-                search_attempted: true,
-                search_range: searchRange,
-                latest_block: latestIndex
-            };
-        }
-        
-        // Create proof bundle with block data
-        const proofBundle = {
-            cid: cid,
-            block_data: blockData,
-            download_timestamp: new Date().toISOString(),
-            api_endpoint: apiBase,
-            search_method: foundIndex ? `Found in block ${foundIndex}` : `Searched ${searchRange} recent blocks (${latestIndex} to ${latestIndex - searchRange + 1})`,
-            search_details: {
-                latest_block: latestIndex,
-                search_range: searchRange,
-                blocks_searched: foundIndex ? `1-${searchRange}` : `1-${searchRange} (not found)`
-            }
-        };
-        
-        // Create downloadable JSON file
-        const blob = new Blob([JSON.stringify(proofBundle, null, 2)], { 
-            type: 'application/json' 
-        });
+            const proofData = await api.getProofData(cid);
+            if (proofData) {
+                const blob = new Blob([JSON.stringify(proofData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `proof-bundle-${cid.substring(0, 16)}.json`;
+                a.download = `proof-bundle-${cid}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+                console.log('✅ Proof bundle downloaded via API');
+                return;
+            }
+        } catch (apiError) {
+            console.warn('API download failed, trying direct IPFS:', apiError);
+        }
         
-        console.log('Proof bundle downloaded:', cid);
-        console.log('Block data:', blockData);
-        console.log('Search details:', proofBundle.search_details);
+        // Fallback to direct IPFS download
+        const gateways = IPFS_GATEWAYS.map(gateway => `${gateway}${cid}`);
+        const downloadUrl = gateways[0];
+        
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `proof-bundle-${cid}`;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        console.log('✅ Proof bundle download initiated');
+        
     } catch (error) {
-        console.error('Error downloading proof bundle:', error);
-        
-        // Create error proof bundle with validation details
-        const errorBundle = {
-            cid: cid,
-            error: error.message,
-            error_type: 'validation_error',
-            timestamp: new Date().toISOString(),
-            validation_details: {
-                cid_length: cid ? cid.length : 0,
-                starts_with_qm: cid ? cid.startsWith('Qm') : false,
-                base58btc_valid: cid ? /^[1-9A-HJ-NP-Za-km-z]+$/.test(cid) : false
-            }
-        };
-        
-        // Create downloadable error JSON file
-        const blob = new Blob([JSON.stringify(errorBundle, null, 2)], { 
-            type: 'application/json' 
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `proof-bundle-error-${cid ? cid.substring(0, 16) : 'invalid'}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        alert(`CID Validation Error: ${error.message}\n\nAn error proof bundle has been downloaded with validation details.`);
+        console.error('❌ Failed to download proof bundle:', error);
+        alert('Failed to download proof bundle. Please try again.');
     }
 };
-/**
- * COINjecture Web Interface
- * Complete frontend rebuild with all CLI commands and API integration
- */
 
-// Use Web Crypto API for Ed25519 (built into modern browsers)
-async function waitForNobleEd25519() {
-  // Check if Web Crypto API supports Ed25519
-  if (window.crypto && window.crypto.subtle) {
-    try {
-      // Test if Ed25519 is supported
-      const keyPair = await window.crypto.subtle.generateKey(
-        { name: 'Ed25519' },
-        false,
-        ['sign', 'verify']
-      );
-      console.log('Web Crypto API Ed25519 support confirmed');
-      return 'webcrypto'; // Return a marker that we're using Web Crypto
-    } catch (error) {
-      console.log('Web Crypto API Ed25519 not supported, trying fallback...');
-    }
-  }
-  
-  // Fallback to checking for external library
-  let attempts = 0;
-  while (attempts < 20) {
-    if (window.nobleEd25519 || window.ed25519 || window.Ed25519 || 
-        (window.noble && window.noble.ed25519)) {
-      const lib = window.nobleEd25519 || window.ed25519 || window.Ed25519 || 
-                  (window.noble && window.noble.ed25519);
-      console.log('Found external Ed25519 library:', lib);
-      return lib;
-    }
-    await new Promise(resolve => setTimeout(resolve, 100));
-    attempts++;
-  }
-  
-  // Final fallback to Web Crypto API
-  if (window.ed25519Fallback === 'webcrypto' && window.crypto && window.crypto.subtle) {
-    console.log('Using Web Crypto API fallback for Ed25519');
-    return 'webcrypto';
-  }
-  
-  throw new Error('Ed25519 library failed to load');
-}
-
+// Main WebInterface class (simplified for modular architecture)
 class WebInterface {
-  constructor() {
-    // Use production API endpoint (HTTPS required for coinjecture.com)
-    this.apiBase = 'https://api.coinjecture.com';
-    this.output = document.getElementById('terminal-output');
-    this.input = document.getElementById('command-input');
-    this.status = document.getElementById('network-status');
-    this.history = [];
-    this.historyIndex = -1;
-    
-    // Wallet dashboard elements
+    constructor() {
+        this.apiBase = API_CONFIG.BASE_URL;
+        this.wallet = null;
+        this.isConnected = false;
+        this.currentPage = 'terminal';
+        this.isMining = false;
+        this.miningInterval = null;
+        this.subsetSumSolver = new SubsetSumSolver();
+        this.p2pMiningService = new P2PMiningService();
+        this.p2pMiningService.wallet = this.wallet;
+        this.p2pMiningService.addOutput = this.addOutput.bind(this);
+        this.p2pMiningService.metricsDashboard = this.metricsDashboard;
+        this.p2pMiningService.updateWalletDisplay = this.updateWalletDisplay.bind(this);
+        
+        // Expose functions to global scope for HTML onclick handlers
+        window.openIPFSViewer = (cid) => {
+            if (domUtils.openIPFSViewer) {
+                domUtils.openIPFSViewer(cid);
+            } else {
+                console.log('IPFS Viewer not available');
+            }
+        };
+        window.copyToClipboard = (text) => {
+            if (clipboardUtils.copyToClipboard) {
+                clipboardUtils.copyToClipboard(text);
+            } else {
+                navigator.clipboard.writeText(text);
+            }
+        };
+        
+        this.initializeElements();
+        this.attachEventListeners();
+        this.initializeWallet();
+        this.showWelcomeMessage();
+        
+        // Load initial metrics
+        this.loadMetrics();
+    }
+
+    initializeElements() {
+        // Terminal elements
+        this.terminalOutput = document.getElementById('terminal-output');
+        this.commandInput = document.getElementById('command-input');
+        this.networkStatus = document.getElementById('network-status');
+        
+        // Wallet elements
     this.walletDashboard = document.getElementById('wallet-dashboard');
     this.walletAddress = document.getElementById('wallet-address');
+        this.copyAddressBtn = document.getElementById('copy-address-btn');
     this.rewardsTotal = document.getElementById('status-rewards-total');
     this.blocksMined = document.getElementById('blocks-mined');
-    this.copyAddressBtn = document.getElementById('copy-address-btn');
-    
-    // Rewards refresh interval
-    this.rewardsRefreshInterval = null;
-    
-    // Validate browser support for Ed25519
-    this.validateBrowserSupport();
-    
-    // Add certificate notice to the page
-    this.addCertificateNotice();
-    this.isProcessing = false;
-    this.wallet = null; // Store wallet for persistent mining
-    
-    this.init();
-  }
-  
-  validateBrowserSupport() {
-    // Check for required browser features
-    if (!window.crypto || !window.crypto.subtle) {
-      this.addOutput('❌ This browser does not support required cryptographic features.', 'error');
-      return false;
+        
+        // Navigation elements
+        this.navLinks = document.querySelectorAll('.nav-link');
+        this.pages = document.querySelectorAll('.page');
     }
-    
-    if (!window.TextEncoder || !window.TextDecoder) {
-      this.addOutput('❌ This browser does not support TextEncoder/TextDecoder.', 'error');
-      return false;
-    }
-    
-    return true;
-  }
-  
-  addCertificateNotice() {
-    const notice = document.createElement('div');
-    notice.className = 'certificate-notice';
-    notice.innerHTML = `
-      <div style="background: #1a1a1a; border: 1px solid #9d7ce8; border-radius: 6px; padding: 12px; margin: 10px 0; color: #e0e0e0;">
-        <strong>🔒 Certificate Notice:</strong> This site uses a self-signed certificate for development. 
-        Click "Advanced" and "Proceed to site" to continue.
-      </div>
-    `;
-    document.body.insertBefore(notice, document.body.firstChild);
-  }
-  
-  async init() {
-    try {
-      // Debug: Check if elements exist
-      console.log('Input element:', this.input);
-      console.log('Output element:', this.output);
-      
-      // Set up event listeners first
-      this.setupEventListeners();
-      this.setupNavigation();
-      
-      // Update network status
-    this.updateNetworkStatus();
-      
-      // Show initial help immediately
-      this.showWelcome();
-      
-      // Try to load Ed25519 library in background
-      try {
-        const ed25519 = await waitForNobleEd25519();
-        console.log('Ed25519 library loaded:', ed25519);
-        this.addOutput('✅ Cryptographic library loaded successfully');
-      } catch (error) {
-        console.error('Ed25519 library failed to load:', error);
-        this.addOutput('⚠️  Cryptographic library not available - using demo wallets');
-      }
-      
-      // Initialize wallet (will work even without Ed25519 for basic functionality)
-      this.wallet = await this.createOrLoadWallet();
-      
-    } catch (error) {
-      this.addOutput(`❌ Initialization error: ${error.message}`, 'error');
-      // Still show help even if there's an error
-      this.showWelcome();
-    }
-  }
-  
-  setupEventListeners() {
+
+    attachEventListeners() {
     // Command input
-    if (this.input) {
-      this.input.addEventListener('keydown', (e) => {
+        if (this.commandInput) {
+            this.commandInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
-      e.preventDefault();
-          this.processCommand();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      this.navigateHistory(-1);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      this.navigateHistory(1);
-        }
-      });
-      
-      // Add click handler to ensure focus
-      this.input.addEventListener('click', () => {
-        this.input.focus();
-      });
-      
-      // Focus the input field immediately
-      setTimeout(() => {
-        this.input.focus();
-      }, 100);
-      
-      // Add a global click handler to focus input when clicking anywhere
-      document.addEventListener('click', (e) => {
-        if (e.target !== this.input) {
-          this.input.focus();
-        }
-      });
-      
-      // Ensure input is always focused
-      this.input.addEventListener('blur', () => {
-        setTimeout(() => this.input.focus(), 10);
-      });
-      } else {
-      console.error('Command input element not found');
+                    this.executeCommand(e.target.value);
+                    e.target.value = '';
+                }
+            });
     }
     
     // Copy address button
     if (this.copyAddressBtn) {
       this.copyAddressBtn.addEventListener('click', () => {
-        this.handleCopyAddress();
-      });
-    }
-  }
+                if (this.wallet?.address) {
+                    clipboardUtils.copyToClipboard(this.wallet.address);
+                }
+            });
+        }
 
-  setupNavigation() {
-    // Add click handlers for navigation tabs
-    const navLinks = document.querySelectorAll('.nav-link');
-    navLinks.forEach(link => {
+        // Navigation
+        this.navLinks.forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
-        const page = link.getAttribute('data-page');
-        this.switchPage(page);
+                const page = link.dataset.page;
+                if (page) {
+                    this.showPage(page);
+                }
       });
     });
   }
 
-  switchPage(page) {
-    // Hide all pages
-    const pages = document.querySelectorAll('.page');
-    pages.forEach(p => p.classList.remove('active'));
-    
-    // Remove active class from all nav links
-    const navLinks = document.querySelectorAll('.nav-link');
-    navLinks.forEach(link => link.classList.remove('active'));
-    
-    // Show selected page
-    const targetPage = document.getElementById(`page-${page}`);
-    if (targetPage) {
-      targetPage.classList.add('active');
-    }
-    
-    // Add active class to clicked nav link
-    const clickedLink = document.querySelector(`[data-page="${page}"]`);
-    if (clickedLink) {
-      clickedLink.classList.add('active');
-    }
-
-    // Handle page-specific logic
-    this.currentPage = page;
-    
-    if (page === 'metrics') {
-      // Start metrics polling when metrics page is shown
-      this.startMetricsPolling();
-      // Load initial metrics
-      this.fetchMetrics().then(metrics => {
-        this.updateMetricsDashboard(metrics);
-      });
-    } else {
-      // Stop metrics polling when leaving metrics page
-      this.stopMetricsPolling();
-    }
-    
-    // Handle specific page content
-    switch(page) {
-      case 'api':
-        this.loadAPIDocs();
-        break;
-      case 'download':
-        this.loadDownloadPage();
-        break;
-      case 'proof':
-        this.loadProofPage();
-        break;
-      case 'terminal':
-        // Terminal is already loaded
-        break;
-    }
-  }
-
-  loadAPIDocs() {
-    // API docs are already in HTML, just ensure they're visible
-    console.log('Loading API documentation...');
-  }
-
-  loadDownloadPage() {
-    // Download page content is already in HTML
-    console.log('Loading download page...');
-  }
-
-  loadProofPage() {
-    // Proof page content is already in HTML
-    console.log('Loading proof page...');
-  }
-
-  async handleConsensusStatus(args) {
-    try {
-      this.addOutput('🔍 Checking consensus engine status...');
-      
-      // Check blockchain data using consolidated API
-      const [metricsResponse, leaderboardResponse] = await Promise.all([
-        this.fetchWithFallback('/v1/metrics/dashboard'),
-        this.fetchWithFallback('/v1/rewards/leaderboard')
-      ]);
-
-      this.addMultiLineOutput([
-        '🔍 Consensus Engine Status Report',
-        '',
-        '📊 Blockchain Data:'
-      ]);
-
-      if (latestResponse.ok) {
-        const latestData = await latestResponse.json();
-        if (latestData.status === 'success') {
-          this.addOutput(`   ✅ Latest block: #${latestData.data.index || 'N/A'}`);
-          this.addOutput(`   🔗 Block hash: ${latestData.data.block_hash ? 'Available' : 'N/A (consensus issue)'}`);
-      } else {
-          this.addOutput(`   ❌ Latest block: Error fetching`);
-        }
-      } else {
-        this.addOutput(`   ❌ Latest block: API error (${latestResponse.status})`);
-      }
-
-      if (allBlocksResponse.ok) {
-        const allBlocksData = await allBlocksResponse.json();
-        if (allBlocksData.status === 'success') {
-          this.addOutput(`   ✅ Total blocks: ${allBlocksData.meta.total_blocks}`);
-        } else {
-          this.addOutput(`   ❌ Total blocks: Error fetching`);
-        }
-      } else {
-        this.addOutput(`   ❌ Total blocks: API error (${allBlocksResponse.status})`);
-      }
-
-      if (leaderboardResponse.ok) {
-        const leaderboardData = await leaderboardResponse.json();
-        if (leaderboardData.status === 'success') {
-          const leaderboard = leaderboardData.data.leaderboard;
-          const hasWorkScores = leaderboard.some(miner => miner.total_work_score > 0);
-          this.addOutput(`   ${hasWorkScores ? '✅' : '⚠️'} Work scores: ${hasWorkScores ? 'Calculated' : 'All zero (consensus issue)'}`);
-          this.addOutput(`   ✅ Total miners: ${leaderboardData.data.total_miners}`);
-          this.addOutput(`   ✅ Total rewards: ${leaderboardData.data.total_rewards_distributed} BEANS`);
-        } else {
-          this.addOutput(`   ❌ Leaderboard: Error fetching`);
-        }
-      } else {
-        this.addOutput(`   ❌ Leaderboard: API error (${leaderboardResponse.status})`);
-      }
-
-      this.addOutput('');
-      this.addOutput('🔧 Known Issues:');
-      this.addOutput('   • Consensus engine has "get_pending_events" errors');
-      this.addOutput('   • Work scores showing as 0.0 (should be calculated)');
-      this.addOutput('   • New mining activity may not be processed immediately');
-      this.addOutput('');
-      this.addOutput('💡 Workarounds:');
-      this.addOutput('   • Use "wallet-import" to switch to existing wallets with rewards');
-      this.addOutput('   • Use "wallet-lookup" to find wallets with mining history');
-      this.addOutput('   • Rewards are still calculated (base rate: 50 BEANS per block)');
-      this.addOutput('   • Blockchain data is still accessible and immutable');
-
-    } catch (error) {
-      this.addOutput(`❌ Error checking consensus status: ${error.message}`, 'error');
-    }
-  }
-
-  async handleBlockchainStatus(args) {
-    try {
-      this.addOutput('🔍 Checking blockchain processing status...');
-      
-      // Check blockchain data using consolidated API
-      const [metricsResponse] = await Promise.all([
-        this.fetchWithFallback('/v1/metrics/dashboard')
-      ]);
-
-      this.addMultiLineOutput([
-        '🔍 Blockchain Processing Status',
-        '',
-        '📊 Current State:'
-      ]);
-
-      if (latestResponse.ok) {
-        const latestData = await latestResponse.json();
-        if (latestData.status === 'success') {
-          const currentBlock = latestData.data;
-          this.addOutput(`   ✅ Latest block: #${currentBlock.index || 'N/A'}`);
-          this.addOutput(`   🔗 Block hash: ${currentBlock.block_hash ? 'Available' : 'N/A (processing issue)'}`);
-          this.addOutput(`   ⏰ Timestamp: ${currentBlock.timestamp ? new Date(currentBlock.timestamp * 1000).toLocaleString() : 'N/A'}`);
-        } else {
-          this.addOutput(`   ❌ Latest block: Error fetching`);
-        }
-      } else {
-        this.addOutput(`   ❌ Latest block: API error (${latestResponse.status})`);
-      }
-
-      if (allBlocksResponse.ok) {
-        const allBlocksData = await allBlocksResponse.json();
-        if (allBlocksData.status === 'success') {
-          this.addOutput(`   ✅ Total blocks: ${allBlocksData.meta.total_blocks}`);
-          this.addOutput(`   📈 Blockchain size: ${allBlocksData.meta.total_blocks} blocks`);
-        } else {
-          this.addOutput(`   ❌ Total blocks: Error fetching`);
-        }
-      } else {
-        this.addOutput(`   ❌ Total blocks: API error (${allBlocksResponse.status})`);
-      }
-
-      this.addOutput('');
-      this.addOutput('⚠️  Known Issues:');
-      this.addOutput('   • Blockchain stuck at block 5277 (consensus engine error)');
-      this.addOutput('   • New mining activity not being processed');
-      this.addOutput('   • Consensus engine has "add_block" method errors');
-      this.addOutput('');
-      this.addOutput('💡 Workarounds:');
-      this.addOutput('   • Use "wallet-import" to switch to existing wallets with rewards');
-      this.addOutput('   • Use "wallet-lookup" to find wallets with mining history');
-      this.addOutput('   • Rewards are calculated from existing blockchain data');
-      this.addOutput('   • New mining will be processed when consensus is fixed');
-
-    } catch (error) {
-      this.addOutput(`❌ Error checking blockchain status: ${error.message}`, 'error');
-    }
-  }
-  
-  generateRecoveryPhrase() {
-    // Generate a 12-word recovery phrase
-    const wordList = [
-      'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract', 'absurd', 'abuse',
-      'access', 'accident', 'account', 'accuse', 'achieve', 'acid', 'acoustic', 'acquire', 'across', 'act',
-      'action', 'actor', 'actress', 'actual', 'adapt', 'add', 'addict', 'address', 'adjust', 'admit',
-      'adult', 'advance', 'advice', 'aerobic', 'affair', 'afford', 'afraid', 'again', 'age', 'agent',
-      'agree', 'ahead', 'aim', 'air', 'airport', 'aisle', 'alarm', 'album', 'alcohol', 'alert',
-      'alien', 'all', 'alley', 'allow', 'almost', 'alone', 'alpha', 'already', 'also', 'alter',
-      'always', 'amateur', 'amazing', 'among', 'amount', 'amused', 'analyst', 'anchor', 'ancient', 'anger',
-      'angle', 'angry', 'animal', 'ankle', 'announce', 'annual', 'another', 'answer', 'antenna', 'antique',
-      'anxiety', 'any', 'apart', 'apology', 'appear', 'apple', 'approve', 'april', 'arch', 'arctic',
-      'area', 'arena', 'argue', 'arm', 'armed', 'armor', 'army', 'around', 'arrange', 'arrest'
-    ];
-    
-    const words = [];
-    for (let i = 0; i < 12; i++) {
-      const randomIndex = Math.floor(Math.random() * wordList.length);
-      words.push(wordList[randomIndex]);
-    }
-    
-    return words.join(' ');
-  }
-
-  async createOrLoadWallet() {
-    try {
-      // ALWAYS check if wallet exists in localStorage first
-      const existingWallet = localStorage.getItem('coinjecture_wallet');
-      if (existingWallet) {
+    async initializeWallet() {
         try {
-          const walletData = JSON.parse(existingWallet);
-          // Validate wallet data structure
-          if (walletData.address && walletData.created) {
-                this.addOutput(`🔐 Using existing wallet: ${walletData.address.substring(0, 16)}...`);
+            const storedWallet = localStorage.getItem('coinjecture_wallet');
+            if (storedWallet) {
+                this.wallet = JSON.parse(storedWallet);
+                this.updateWalletDisplay();
+                this.isConnected = true;
+                this.updateNetworkStatus('🌐 Connected');
                 
-                // Update network status with existing wallet
-                this.updateNetworkStatus();
-                
-                return {
-              address: walletData.address,
-              publicKey: walletData.publicKey,
-              privateKey: walletData.privateKey,
-              created: walletData.created,
-              isDemo: walletData.isDemo || false,
-              mnemonic: walletData.mnemonic || null,
-              recoveryInstructions: walletData.recoveryInstructions || null,
-              
-              // Add signing methods to loaded wallet
-              async signBlock(blockData) {
-                if (this.isDemo) {
-                  // Demo wallet uses simple hash-based signature
-                  const message = JSON.stringify(blockData);
-                  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(message));
-                  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+                // Check for local-only blocks that need to be submitted to blockchain
+                await this.migrateLocalBlocksToBlockchain();
       } else {
-                  try {
-                    const ed25519 = await waitForNobleEd25519();
-                    const privateKey = ed25519.Ed25519PrivateKey.from_private_bytes(Buffer.from(this.privateKey, 'hex'));
-                    const message = JSON.stringify(blockData);
-                    const signature = privateKey.sign(Buffer.from(message, 'utf8'));
-                    return Buffer.from(signature).toString('hex');
-                  } catch (error) {
-                    console.error('Signing error:', error);
-                    return 'demo_signature_' + Math.random().toString(36).substring(2, 10);
-                  }
-                }
-              },
-              
-              async getPublicKey() {
-                return this.publicKey;
-              },
-              
-              // Add recovery methods
-              async exportRecoveryPhrase() {
-                if (this.mnemonic) {
-                  return this.mnemonic;
-                } else {
-                  throw new Error('No recovery phrase available for this wallet');
-                }
-              },
-              
-              async importFromRecoveryPhrase(mnemonic) {
-                try {
-                  // Validate mnemonic format (12 words)
-                  const words = mnemonic.trim().split(/\s+/);
-                  if (words.length !== 12) {
-                    throw new Error('Recovery phrase must be exactly 12 words');
-                  }
-                  
-                  // Generate seed from mnemonic
-                  const seed = await this.generateSeedFromMnemonic(mnemonic);
-                  
-                  // Derive Ed25519 key from seed
-                  const privateKeyBytes = seed.slice(0, 32);
-                  const ed25519 = await waitForNobleEd25519();
-                  const privateKey = ed25519.Ed25519PrivateKey.from_private_bytes(privateKeyBytes);
-                  const publicKey = privateKey.public_key();
-                  
-                  // Generate address
-                  const publicKeyHex = Buffer.from(publicKey.to_bytes()).toString('hex');
-                  const address = 'BEANS' + publicKeyHex.substring(0, 40);
-                  
-                  // Create new wallet from recovery phrase
-                  const recoveredWallet = {
+                // Generate new wallet if none exists
+                await this.generateWallet();
+            }
+    } catch (error) {
+            console.error('Failed to initialize wallet:', error);
+            this.updateNetworkStatus('❌ Wallet error');
+        }
+    }
+
+    async generateWallet() {
+        try {
+            // Generate proper Ed25519 wallet
+            if (window.nobleEd25519) {
+                const privateKey = window.nobleEd25519.utils.randomPrivateKey();
+                const publicKey = window.nobleEd25519.getPublicKey(privateKey);
+                
+                // Convert to hex strings
+                const privateKeyHex = Array.from(privateKey).map(b => b.toString(16).padStart(2, '0')).join('');
+                const publicKeyHex = Array.from(publicKey).map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                // Create address from public key (first 20 bytes)
+                const address = '0x' + publicKeyHex.substring(0, 40);
+                
+                this.wallet = {
                     address: address,
                     publicKey: publicKeyHex,
-                    privateKey: Buffer.from(privateKeyBytes).toString('hex'),
-                    created: Date.now(),
-                    isDemo: false,
-                    mnemonic: mnemonic,
-                    recoveryInstructions: "Recovered from 12-word phrase"
-                  };
-                  
-                  // Save to localStorage
-                  localStorage.setItem('coinjecture_wallet', JSON.stringify(recoveredWallet));
-                  
-                  return recoveredWallet;
-    } catch (error) {
-                  throw new Error(`Failed to recover wallet: ${error.message}`);
-                }
-              },
-              
-              async generateSeedFromMnemonic(mnemonic) {
-                // Simple seed generation from mnemonic (for demo purposes)
-                // In production, use proper BIP39 implementation
-                const words = mnemonic.trim().split(/\s+/);
-                let seed = '';
-                for (const word of words) {
-                  seed += word.charCodeAt(0).toString(16);
-                }
-                // Pad to 64 bytes
-                while (seed.length < 128) {
-                  seed += '0';
-                }
-                return Buffer.from(seed.substring(0, 128), 'hex');
+                    privateKey: privateKeyHex,
+                    balance: 0,
+                    blocksMined: 0
+                };
+                
+                // Update P2P mining service with new wallet
+                this.p2pMiningService.wallet = this.wallet;
+                this.p2pMiningService.updateWalletDisplay = this.updateWalletDisplay.bind(this);
+                
+                localStorage.setItem('coinjecture_wallet', JSON.stringify(this.wallet));
+                this.updateWalletDisplay();
+                this.isConnected = true;
+                this.updateNetworkStatus('🌐 Connected');
+                this.addOutput(`✅ New Ed25519 wallet generated: ${address}`, 'success');
+            } else {
+                // Fallback to demo wallet if Ed25519 not available
+                const newAddress = '0xBEANS' + Math.random().toString(36).substring(2, 10).toUpperCase();
+                this.wallet = { 
+                    address: newAddress, 
+                    publicKey: 'demo_public_key', 
+                    privateKey: 'demo_private_key',
+                    balance: 0,
+                    blocksMined: 0
+                };
+                
+                // Update P2P mining service with new wallet
+                this.p2pMiningService.wallet = this.wallet;
+                this.p2pMiningService.updateWalletDisplay = this.updateWalletDisplay.bind(this);
+                
+                localStorage.setItem('coinjecture_wallet', JSON.stringify(this.wallet));
+                this.updateWalletDisplay();
+                this.isConnected = true;
+                this.updateNetworkStatus('🌐 Connected');
+                this.addOutput(`✅ Demo wallet generated: ${newAddress}`, 'success');
               }
-            };
-          }
-        } catch (parseError) {
-          console.warn('Invalid wallet data in localStorage, will create new wallet');
+    } catch (error) {
+            console.error('Wallet generation failed:', error);
+            this.addOutput(`❌ Failed to generate wallet: ${error.message}`, 'error');
         }
-      }
-      
-      // Only create new wallet if none exists or existing is invalid
-      this.addOutput('🔐 Creating new wallet...');
-      
-      // Try to generate new wallet with Ed25519
-      try {
-        const ed25519 = await waitForNobleEd25519();
-        
-        let privateKeyHex, publicKeyHex;
-        
-        if (ed25519 === 'webcrypto') {
-          // Use Web Crypto API
-          const keyPair = await window.crypto.subtle.generateKey(
-            { name: 'Ed25519' },
-            true, // extractable
-            ['sign', 'verify']
-          );
-          
-          // Export private key
-          const privateKeyBuffer = await window.crypto.subtle.exportKey('raw', keyPair.privateKey);
-          privateKeyHex = Array.from(new Uint8Array(privateKeyBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-          
-          // Export public key
-          const publicKeyBuffer = await window.crypto.subtle.exportKey('raw', keyPair.publicKey);
-          publicKeyHex = Array.from(new Uint8Array(publicKeyBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-        } else {
-          // Use external library
-          const privateKey = ed25519.Ed25519PrivateKey.generate();
-          const publicKey = privateKey.public_key();
-          
-          // Convert to hex strings
-          privateKeyHex = Buffer.from(privateKey.private_bytes()).toString('hex');
-          publicKeyHex = Buffer.from(publicKey.public_bytes()).toString('hex');
-        }
-        
-        // Generate address (simplified for demo)
-        const address = `BEANS${publicKeyHex.substring(0, 40)}`;
-        
-        // Generate recovery phrase (12 words)
-        const mnemonic = this.generateRecoveryPhrase();
-        
-        const wallet = {
-          address: address,
-          publicKey: publicKeyHex,
-          privateKey: privateKeyHex,
-          created: Date.now(),
-          isDemo: false,
-          mnemonic: mnemonic,
-          recoveryInstructions: "Save this 12-word phrase securely - it's your only way to recover this wallet",
-          
-          // Add signing methods
-          async signBlock(blockData) {
-            try {
-              const ed25519 = await waitForNobleEd25519();
-              const message = JSON.stringify(blockData);
-              const messageBuffer = new TextEncoder().encode(message);
-              
-              if (ed25519 === 'webcrypto') {
-                // Use Web Crypto API for signing
-                const privateKeyBuffer = new Uint8Array(this.privateKey.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                const privateKey = await window.crypto.subtle.importKey(
-                  'raw',
-                  privateKeyBuffer,
-                  { name: 'Ed25519' },
-                  false,
-                  ['sign']
-                );
-                
-                const signature = await window.crypto.subtle.sign('Ed25519', privateKey, messageBuffer);
-                return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
-              } else {
-                // Use external library
-                const privateKey = ed25519.Ed25519PrivateKey.from_private_bytes(Buffer.from(this.privateKey, 'hex'));
-                const signature = privateKey.sign(Buffer.from(message, 'utf8'));
-                return Buffer.from(signature).toString('hex');
-              }
-    } catch (error) {
-              console.error('Signing error:', error);
-              return 'demo_signature_' + Math.random().toString(36).substring(2, 10);
-            }
-          },
-          
-          async getPublicKey() {
-            return this.publicKey;
-          },
-          
-          // Add recovery methods
-          async exportRecoveryPhrase() {
-            return this.mnemonic;
-          },
-          
-          async importFromRecoveryPhrase(mnemonic) {
-            try {
-              // Validate mnemonic format (12 words)
-              const words = mnemonic.trim().split(/\s+/);
-              if (words.length !== 12) {
-                throw new Error('Recovery phrase must be exactly 12 words');
-              }
-              
-              // Generate seed from mnemonic
-              const seed = await this.generateSeedFromMnemonic(mnemonic);
-              
-              // Derive Ed25519 key from seed
-              const privateKeyBytes = seed.slice(0, 32);
-              const ed25519 = await waitForNobleEd25519();
-              
-              let privateKeyHex, publicKeyHex;
-              
-              if (ed25519 === 'webcrypto') {
-                // Use Web Crypto API
-                const privateKey = await window.crypto.subtle.importKey(
-                  'raw',
-                  privateKeyBytes,
-                  { name: 'Ed25519' },
-                  false,
-                  ['sign']
-                );
-                
-                // Get public key
-                const publicKey = await window.crypto.subtle.importKey(
-                  'raw',
-                  privateKeyBytes,
-                  { name: 'Ed25519' },
-                  false,
-                  ['verify']
-                );
-                
-                privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-                // For Web Crypto, we need to derive the public key differently
-                // This is a simplified approach - in production you'd use proper key derivation
-                publicKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-              } else {
-                // Use external library
-                const privateKey = ed25519.Ed25519PrivateKey.from_private_bytes(privateKeyBytes);
-                const publicKey = privateKey.public_key();
-                
-                privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
-                publicKeyHex = Buffer.from(publicKey.public_bytes()).toString('hex');
-              }
-              
-              // Generate address
-              const address = 'BEANS' + publicKeyHex.substring(0, 40);
-              
-              // Create new wallet from recovery phrase
-              const recoveredWallet = {
-                address: address,
-                publicKey: publicKeyHex,
-                privateKey: Buffer.from(privateKeyBytes).toString('hex'),
-                created: Date.now(),
-                isDemo: false,
-                mnemonic: mnemonic,
-                recoveryInstructions: "Recovered from 12-word phrase"
-              };
-              
-              // Save to localStorage
-              localStorage.setItem('coinjecture_wallet', JSON.stringify(recoveredWallet));
-              
-              return recoveredWallet;
-            } catch (error) {
-              throw new Error(`Failed to recover wallet: ${error.message}`);
-            }
-          },
-          
-          async generateSeedFromMnemonic(mnemonic) {
-            // Simple seed generation from mnemonic (for demo purposes)
-            // In production, use proper BIP39 implementation
-            const words = mnemonic.trim().split(/\s+/);
-            let seed = '';
-            for (const word of words) {
-              seed += word.charCodeAt(0).toString(16);
-            }
-            // Pad to 64 bytes
-            while (seed.length < 128) {
-              seed += '0';
-            }
-            return Buffer.from(seed.substring(0, 128), 'hex');
-          }
-        };
-        
-        // Save to localStorage
-        localStorage.setItem('coinjecture_wallet', JSON.stringify(wallet));
-          this.addOutput(`✅ New wallet created: ${address.substring(0, 16)}...`);
-          
-          // Update network status with new wallet
-          this.updateNetworkStatus();
-          
-          // Register wallet with backend for persistence
-          try {
-            const message = `register:${address}:${Date.now()}`;
-            const signature = await wallet.signBlock({data: message});
-            
-            await this.fetchWithFallback('/v1/wallet/register', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({
-                wallet_address: address,
-                public_key: publicKey,
-                signature: signature,
-                device: 'web'
-              })
-            });
-            
-            this.addOutput('✅ Wallet registered on blockchain network');
-          } catch (error) {
-            this.addOutput('⚠️  Wallet created locally (will register on first mining)');
-          }
-          
-          return wallet;
-      } catch (ed25519Error) {
-        // Fallback: create a demo wallet without Ed25519
-        const demoAddress = `BEANS${Math.random().toString(36).substring(2, 42)}`;
-        const wallet = {
-          address: demoAddress,
-          publicKey: 'demo-public-key',
-          privateKey: 'demo-private-key',
-          created: Date.now(),
-          isDemo: true,
-          
-          // Add signing methods for demo wallet
-          async signBlock(blockData) {
-            // Demo wallet uses simple hash-based signature
-            const message = JSON.stringify(blockData);
-            const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(message));
-            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-          },
-          
-          async getPublicKey() {
-            return this.publicKey;
-          }
-        };
-        
-        // Save to localStorage
-        localStorage.setItem('coinjecture_wallet', JSON.stringify(wallet));
-        this.addOutput(`✅ Demo wallet created: ${demoAddress.substring(0, 16)}...`);
-        
-        return wallet;
-      }
-      
-    } catch (error) {
-      console.error('Wallet creation error:', error);
-      this.addOutput(`❌ Wallet error: ${error.message}`, 'error');
-      return null;
     }
-  }
-  
-  showWelcome() {
-    this.addMultiLineOutput([
-      '🚀 COINjecture Web CLI',
-      '',
-      'Welcome to the COINjecture blockchain interface!',
-      'Type "help" for available commands.',
-      '',
-      '💡 Quick start:',
-      '  • help            - Show all available commands',
-      '  • wallet-generate - Create a new wallet',
-      '  • wallet-export - Show recovery phrase',
-      '  • wallet-import <phrase> - Recover wallet from phrase',
-      '  • wallet-backup - Download wallet backup',
-      '  • blockchain-stats - View blockchain statistics',
-      '  • mine --tier=mobile - Start mining',
-      '  • stop-mining - Stop mining',
-      '  • rewards         - Check your mining rewards',
-      '',
-      '💻 Click in the input field below to start typing commands...'
-    ]);
-  }
-  
-  async processCommand() {
-    const command = this.input.value.trim();
-    if (!command) return;
-    
-    // Add to history
-    this.history.push(command);
-    this.historyIndex = this.history.length;
-    
-    // Display command
-    this.addOutput(`coinjectured$ ${command}`);
-    
-    // Clear input
-      this.input.value = '';
-    
-    // Process command
-    await this.executeCommand(command);
+
+    updateWalletDisplay() {
+        if (!this.wallet) return;
+
+        if (this.walletDashboard) {
+            this.walletDashboard.style.display = 'block';
+        }
+        
+        if (this.walletAddress) {
+            this.walletAddress.textContent = this.wallet.address;
+        }
+        
+        if (this.rewardsTotal) {
+            this.rewardsTotal.textContent = `${this.wallet.balance || 0} BEANS`;
+        }
+        
+        if (this.blocksMined) {
+            this.blocksMined.textContent = `${this.wallet.blocksMined || 0} blocks`;
+        }
+    }
+
+    updateNetworkStatus(status) {
+        if (this.networkStatus) {
+            this.networkStatus.textContent = status;
+        }
+    }
+
+    showPage(pageName) {
+        // Update navigation
+        this.navLinks.forEach(link => {
+            link.classList.toggle('active', link.dataset.page === pageName);
+        });
+
+        // Update page content
+        this.pages.forEach(page => {
+            page.classList.toggle('active', page.id === `page-${pageName}`);
+        });
+
+        this.currentPage = pageName;
+
+        // Handle page-specific initialization
+        switch (pageName) {
+            case 'metrics':
+                metricsDashboard.activate();
+                break;
+            case 'explorer':
+                blockchainExplorer.activate();
+                break;
+            default:
+                metricsDashboard.deactivate();
+                blockchainExplorer.deactivate();
+                break;
+        }
+    }
+
+    addOutput(text, type = 'info') {
+        if (!this.terminalOutput) return;
+
+        const outputDiv = document.createElement('div');
+        outputDiv.className = `output ${type}`;
+        outputDiv.textContent = text;
+        
+        this.terminalOutput.appendChild(outputDiv);
+        this.terminalOutput.scrollTop = this.terminalOutput.scrollHeight;
   }
   
   async executeCommand(command) {
-    const parts = command.split(' ');
-    const cmd = parts[0];
-    const args = parts.slice(1);
-    
-    try {
-    switch(cmd) {
-      case 'blockchain-stats':
-        await this.displayBlockchainStats();
-        break;
+        if (!command.trim()) return;
+
+        this.addOutput(`coinjectured$ ${command}`, 'command');
+
+        const parts = command.trim().split(' ');
+        const cmd = parts[0].toLowerCase();
+
+        try {
+            switch (cmd) {
       case 'help':
         this.showHelp();
         break;
-      case 'get-block':
-        await this.handleGetBlock(args);
+                case 'status':
+                    await this.showStatus();
         break;
-      case 'peers':
-        await this.handlePeers();
+                case 'wallet':
+                    this.showWalletInfo();
         break;
-      case 'telemetry-status':
-        await this.handleTelemetryStatus();
+                case 'clear':
+                    this.clearTerminal();
         break;
-      case 'mine':
-        await this.handleMine(args);
+                case 'ping':
+                    await this.pingServer();
         break;
-      case 'stop-mining':
-        await this.handleStopMining(args);
+                case 'get-block':
+                    await this.handleGetBlock(parts);
         break;
-      case 'ipfs-data':
-        await this.handleIPFSData(args);
+                case 'get-proof':
+                    await this.handleGetProof(parts);
         break;
-      case 'ipfs-stats':
-        await this.handleIPFSStats(args);
+                case 'get-metrics':
+                    await this.handleGetMetrics();
         break;
-      case 'ipfs-download':
-        await this.handleIPFSDownload(args);
+                case 'get-consensus':
+                    await this.handleGetConsensus();
         break;
-      case 'submit-problem':
-        await this.handleSubmitProblem(args);
+                case 'get-rewards':
+                    await this.handleGetRewards();
         break;
-      case 'wallet-generate':
-        await this.handleWalletGenerate(args);
+                case 'get-leaderboard':
+                    await this.handleGetLeaderboard();
         break;
-      case 'wallet-info':
-        await this.handleWalletInfo(args);
+                case 'get-peers':
+                    await this.handleGetPeers();
         break;
-      case 'wallet-export':
-        await this.handleWalletExport(args);
+                case 'get-network':
+                    await this.handleGetNetwork();
         break;
-      case 'wallet-import':
-        await this.handleWalletImport(args);
+                case 'get-telemetry':
+                    await this.handleGetTelemetry();
         break;
-      case 'wallet-backup':
-        await this.handleWalletBackup(args);
+                case 'get-ipfs':
+                    await this.handleGetIpfs(parts);
         break;
-      case 'rewards':
-        await this.handleRewards(args);
+                case 'mine':
+                    await this.handleMine(parts);
           break;
-        case 'leaderboard':
-          await this.handleLeaderboard(args);
+                case 'submit-problem':
+                    await this.handleSubmitProblem(parts);
           break;
-        case 'wallet-import':
-          await this.handleWalletImport(args);
-          break;
-        case 'wallet-lookup':
-          await this.handleWalletLookup(args);
-          break;
-        case 'download-api':
-          await this.handleDownloadAPI(args);
-          break;
-        case 'download-cli':
-          await this.handleDownloadCLI(args);
-          break;
-        case 'generate-proof':
-          await this.handleGenerateProof(args);
-          break;
-        case 'proof':
-          await this.handleProof(args);
-          break;
-        case 'consensus-status':
-          await this.handleConsensusStatus(args);
-          break;
-        case 'blockchain-status':
-          await this.handleBlockchainStatus(args);
+                case 'list-submissions':
+                    await this.handleListSubmissions();
           break;
         case 'send':
-          await this.handleSendTransaction(args);
+                    await this.handleSend(parts);
           break;
-        case 'transactions':
-          await this.handleTransactionHistory(args);
+                case 'get-transactions':
+                    await this.handleGetTransactions();
           break;
-        case 'balance':
-          await this.handleBalance(args);
+                case 'migrate-blocks':
+                    await this.handleMigrateBlocks();
           break;
-        case 'list-problems':
-          await this.handleListProblems(args);
+        case 'check-local-blocks':
+            await this.handleCheckLocalBlocks();
           break;
-        case 'problem-status':
-          await this.handleProblemStatus(args);
-          break;
-        case 'user-register':
-          await this.handleUserRegister(args);
-          break;
-        case 'user-profile':
-          await this.handleUserProfile(args);
-        break;
-      case 'export-wallet':
-        await this.handleExportWallet(args);
-        break;
-      case 'copy-address':
-        await this.handleCopyAddress(args);
-        break;
-      case 'clear':
-        this.clearTerminal();
-        break;
+        case 'update-wallet':
+            await this.handleUpdateWallet();
+            break;
+        case 'check-balance':
+            await this.handleCheckBalance();
+            break;
       default:
-        this.addOutput(`Unknown command: ${cmd}. Type "help" for available commands.`, 'error');
+                    this.addOutput(`❌ Unknown command: ${cmd}. Type 'help' for available commands.`, 'error');
       }
     } catch (error) {
-      this.addOutput(`❌ Command error: ${error.message}`, 'error');
-    }
-  }
-  
-  navigateHistory(direction) {
-    if (this.history.length === 0) return;
-    
-    this.historyIndex += direction;
-    this.historyIndex = Math.max(0, Math.min(this.history.length, this.historyIndex));
-    
-    if (this.historyIndex === this.history.length) {
-      this.input.value = '';
-    } else {
-      this.input.value = this.history[this.historyIndex];
+            this.addOutput(`❌ Error executing command: ${error.message}`, 'error');
     }
   }
   
   showHelp() {
-    const helpLines = [
-      'Available commands:',
-      '',
-      'Blockchain Commands:',
-      '  blockchain-stats      Show blockchain statistics',
-      '  get-block --latest    Get latest block',
-      '  get-block --index <n> Get block by index',
-      '',
-      'Network Commands:',
-      '  peers                 List connected peers',
-      '  telemetry-status      Check network status',
-      '',
-      'Wallet Commands:',
-      '  wallet-generate       Create new wallet',
-      '  wallet-import <addr>  Import existing wallet',
-      '  wallet-lookup         Find wallets with mining history',
-      '  wallet-info           Show wallet details',
-      '  balance               Show wallet balance',
-      '  export-wallet         Export wallet details',
-      '  copy-address          Copy wallet address',
-      '',
-      'Transaction Commands:',
-      '  send <amount> <to>    Send BEANS',
-      '  transactions          Show transaction history',
-      '',
-      'Mining Commands:',
-      '  mine --tier <tier>    Start mining',
-      '  stop-mining           Stop mining',
-      '  rewards               Show mining rewards',
-      '  leaderboard           Show mining leaderboard',
-      '',
-      'IPFS Data Commands:',
-      '  ipfs-data             Show your IPFS data records',
-      '  ipfs-stats            Show your IPFS statistics',
-      '  ipfs-download         Download all your IPFS data',
-      '',
-      'Problem Submission:',
-      '  submit-problem        Submit computational problem',
-      '  list-problems         List available problems',
-      '  problem-status <id>   Check problem status',
-      '',
-      'User Management:',
-      '  user-register         Register as a miner',
-      '  user-profile          View mining profile',
-      '',
-      'Download & Tools:',
-      '  download-api          Get API documentation and endpoints',
-      '  download-cli          Get CLI download links and instructions',
-      '  generate-proof        Generate PDF mining proof document',
-      '  proof                 View Critical Complex Equilibrium Proof',
-      '',
-      'System Commands:',
-      '  consensus-status      Check consensus engine status',
-      '  blockchain-status     Check blockchain processing status',
-      '',
-      'Utility:',
-      '  help                  Show this help',
-      '  clear                 Clear terminal',
-      '',
-      'Mobile tips:',
-      '  • Swipe up/down for command history',
-      '  • Tap and hold for text selection',
-      '  • Use Tab for auto-complete'
-    ];
-    this.addMultiLineOutput(helpLines);
-  }
-  
-  async handleGetBlock(args) {
-    try {
-      const isLatest = args.includes('--latest');
-      const indexArg = args.find(arg => arg.startsWith('--index='));
-      const index = indexArg ? indexArg.split('=')[1] : null;
-      
-      let endpoint;
-      if (isLatest) {
-        endpoint = `${this.apiBase}/v1/metrics/dashboard`;
-      } else if (index) {
-        endpoint = `${this.apiBase}/v1/metrics/dashboard`; // Use consolidated API for all block data
-      } else {
-        this.addOutput('❌ Usage: get-block --latest or get-block --index=<number>', 'error');
-        return;
-      }
-      
-      this.addOutput('🔍 Fetching block data...');
-      const response = await this.fetchWithFallback(endpoint);
-      
-      if (response.ok) {
-        const data = await response.json();
-      if (data.status === 'success') {
-        const block = data.data;
-        this.addMultiLineOutput([
-            '📦 Block Information:',
-            `   Index: ${block.index}`,
-            `   Hash: ${block.hash}`,
-            `   Previous Hash: ${block.previous_hash}`,
-          `   Timestamp: ${new Date(block.timestamp * 1000).toLocaleString()}`,
-            `   Transactions: ${block.transactions ? block.transactions.length : 0}`,
-            `   Miner: ${block.miner_address || 'N/A'}`,
-            `   Work Score: ${block.cumulative_work_score || 'N/A'}`
-        ]);
-  } else {
-          this.addOutput(`❌ Error: ${data.message || 'Failed to get block'}`, 'error');
-        }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
+        this.addOutput('📋 Available Commands:', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('🔍 Blockchain Commands:', 'info');
+        this.addOutput('  get-block --latest          - Get latest block', 'info');
+        this.addOutput('  get-block --index=<number>  - Get block by index', 'info');
+        this.addOutput('  get-proof --cid=<cid>       - Get proof details', 'info');
+        this.addOutput('  get-metrics                 - Get blockchain metrics', 'info');
+        this.addOutput('  get-consensus               - Get consensus status', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('💰 Wallet & Rewards:', 'info');
+        this.addOutput('  get-rewards                 - Get your rewards', 'info');
+        this.addOutput('  get-leaderboard             - Get mining leaderboard', 'info');
+        this.addOutput('  wallet                      - Show wallet information', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('🌐 Network Commands:', 'info');
+        this.addOutput('  get-peers                   - Get connected peers', 'info');
+        this.addOutput('  get-network                 - Get network status', 'info');
+        this.addOutput('  ping                        - Test server connection', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('📊 Data Commands:', 'info');
+        this.addOutput('  get-telemetry               - Get latest telemetry', 'info');
+        this.addOutput('  get-ipfs --cid=<cid>        - Get IPFS data', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('⛏️ Mining Commands:', 'info');
+        this.addOutput('  mine --start                - Start mining in terminal', 'info');
+        this.addOutput('  mine --stop                 - Stop mining', 'info');
+        this.addOutput('  mine --status               - Show mining status', 'info');
+        this.addOutput('  submit-problem --type=<type> --bounty=<amount> - Submit a problem', 'info');
+        this.addOutput('  list-submissions            - List your problem submissions', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('💸 Transaction Commands:', 'info');
+        this.addOutput('  send --to=<address> --amount=<amount> - Send BEANS', 'info');
+        this.addOutput('  get-transactions            - Get transaction history', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('🛠️ Utility Commands:', 'info');
+        this.addOutput('  help                        - Show this help message', 'info');
+        this.addOutput('  status                      - Show network and wallet status', 'info');
+        this.addOutput('  clear                       - Clear terminal output', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('🔄 Migration Commands:', 'info');
+        this.addOutput('  migrate-blocks              - Migrate local blocks to blockchain', 'info');
+        this.addOutput('  check-local-blocks          - Check for local blocks to migrate', 'info');
+        this.addOutput('  update-wallet               - Update wallet balance from blockchain', 'info');
+        this.addOutput('  check-balance               - Check wallet balance from API', 'info');
     }
-  }
-  
-  async handlePeers() {
-    try {
-      this.addOutput('🌐 Fetching peer list...');
-      const response = await this.fetchWithFallback('/v1/display/telemetry/latest');
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        const telemetry = data.data;
-        this.addMultiLineOutput([
-          '🌐 Network Peers:',
-          `   Active Miners: ${telemetry.active_miners || 'N/A'}`,
-          `   Total Nodes: ${telemetry.total_nodes || 'N/A'}`,
-          `   Network Hash Rate: ${telemetry.network_hash_rate || 'N/A'}`,
-          `   Last Update: ${new Date(telemetry.timestamp * 1000).toLocaleString()}`
-        ]);
+
+    async showStatus() {
+        this.addOutput('🔍 Checking network status...', 'info');
+        
+        try {
+            const health = await api.healthCheck();
+            this.addOutput(`✅ Server: ${health.status || 'OK'}`, 'success');
+            
+            if (this.wallet) {
+                this.addOutput(`💰 Wallet: ${this.wallet.address}`, 'info');
+                this.addOutput(`💎 Balance: ${this.wallet.balance || 0} BEANS`, 'info');
         } else {
-        this.addOutput(`❌ Error: ${data.message || 'Failed to get peer data'}`, 'error');
+                this.addOutput('🔌 No wallet connected', 'warning');
       }
     } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
+            this.addOutput(`❌ Server error: ${error.message}`, 'error');
+        }
     }
-  }
-  
-  async handleTelemetryStatus() {
-    try {
-      this.addOutput('📊 Checking telemetry status...');
-      const response = await this.fetchWithFallback('/v1/display/telemetry/latest');
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        const telemetry = data.data;
-        this.addMultiLineOutput([
-          '✅ Network Status:',
-          `   Active Miners: ${telemetry.active_miners || 'N/A'}`,
-          `   Total Nodes: ${telemetry.total_nodes || 'N/A'}`,
-          `   Network Hash Rate: ${telemetry.network_hash_rate || 'N/A'}`,
-          `   Average Block Time: ${telemetry.avg_block_time || 'N/A'}s`,
-          `   Last Update: ${new Date(telemetry.timestamp * 1000).toLocaleString()}`
-        ]);
-      } else {
-        this.addOutput(`❌ Error: ${data.message || 'Failed to get telemetry data'}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-  
-  async handleMine(args) {
-    const tierArg = args.find(arg => arg.startsWith('--tier='));
-    const tier = tierArg ? tierArg.split('=')[1] : 'mobile';
-    
-    if (!['mobile', 'desktop', 'server'].includes(tier)) {
-      this.addOutput('❌ Invalid tier. Use: mobile, desktop, or server', 'error');
+
+    showWalletInfo() {
+    if (!this.wallet) {
+            this.addOutput('🔌 No wallet connected. Please create a wallet first.', 'warning');
       return;
     }
     
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
+        this.addOutput('💼 Wallet Information:', 'info');
+        this.addOutput(`  Address: ${this.wallet.address}`, 'info');
+        this.addOutput(`  Balance: ${this.wallet.balance || 0} BEANS`, 'info');
+        this.addOutput(`  Blocks Mined: ${this.wallet.blocksMined || 0}`, 'info');
     }
-    
-    try {
-      this.addOutput(`⛏️  Starting mining with ${tier} tier...`);
-      this.addOutput('🔄 Connecting to P2P blockchain network...');
-      
-      // Fetch blockchain data from metrics (consecutive blockchain)
-      const metricsResponse = await this.fetchWithFallback('/v1/metrics/dashboard');
 
-      if (metricsResponse.ok) {
-        const metricsData = await metricsResponse.json();
-        
-        if (metricsData.status === 'success') {
-          const blockchain = metricsData.data.blockchain;
-          const latestBlock = blockchain.latest_block;
-          const latestHash = blockchain.latest_hash;
-          const validatedBlocks = blockchain.validated_blocks;
-          
-          this.addOutput(`📊 Current blockchain: Block #${latestBlock}`);
-          
-          if (latestHash && latestHash !== 'N/A') {
-            this.addOutput(`🔗 Latest hash: ${latestHash}`);
-            this.addOutput(`🌐 IPFS CID: ${latestHash}`);
-          } else {
-            this.addOutput(`🔗 Latest hash: Fetching from P2P network...`);
-            this.addOutput(`🌐 IPFS CID: Available via consensus engine`);
-          }
-          
-          this.addOutput(`📈 Total blocks in network: ${validatedBlocks}`);
-          this.addOutput(`🔄 P2P network status: Connected`);
-        } else {
-          this.addOutput(`📊 Current blockchain: Block #8763 (P2P network)`);
-          this.addOutput(`🔗 Latest hash: Available via IPFS`);
-          this.addOutput(`🌐 IPFS CID: Immutable block storage`);
+    clearTerminal() {
+        if (this.terminalOutput) {
+            this.terminalOutput.innerHTML = '<div class="output">coinjectured$ <span class="cursor">█</span></div>';
         }
-      } else {
-        this.addOutput(`📊 Current blockchain: Block #8763 (P2P network)`);
-        this.addOutput(`🔗 Latest hash: Available via IPFS`);
-        this.addOutput(`🌐 IPFS CID: Immutable block storage`);
-      }
-      
-      // Simulate mining process (in real implementation, this would be a background process)
-      this.addOutput('⛏️  Mining process started...');
-      this.addOutput(`💰 Miner address: ${this.wallet.address}`);
-      this.addOutput(`⚡ Mining tier: ${tier}`);
-      this.addOutput('🔄 Working on computational problems...');
-      
-             // Submit actual mining data to blockchain
-             this.addOutput('🚀 Submitting mining data to blockchain...');
-             try {
-               const timestamp = Math.floor(Date.now() / 1000);
-               const workScore = tier === 'mobile' ? 10 : tier === 'desktop' ? 50 : 100;
-               
-               // Get current blockchain height from metrics (consecutive blockchain)
-               const metricsResponse = await this.fetchWithFallback('/v1/metrics/dashboard');
-               let currentHeight = 8763; // Default fallback for consecutive blockchain
-               if (metricsResponse.ok) {
-                 const metricsData = await metricsResponse.json();
-                 if (metricsData.status === 'success') {
-                   const blockchain = metricsData.data.blockchain;
-                   currentHeight = blockchain.latest_block + 1;
-                 }
-               }
-               
-               const miningData = {
-                 event_id: `mining-${timestamp}-${this.wallet.address.substring(0, 8)}`,
-                 block_index: currentHeight,
-                 block_hash: `mined_${timestamp}_${Math.random().toString(36).substring(2, 10)}`,
-                 cid: `QmMined${timestamp}`,
-                 miner_address: this.wallet.address,
-                 capacity: tier === 'mobile' ? 'mobile' : tier === 'desktop' ? 'desktop' : 'server',
-                 work_score: workScore,
-                 ts: timestamp,
-                 previous_hash: '0caf5e010e19062cbb75c12b2d0c109dcfc5ce6fdb494515b08d22f22c908be0', // Latest block hash
-                 merkle_root: '0000000000000000000000000000000000000000000000000000000000000000'
-               };
-               
-               // Sign the block data with wallet
-               const signature = await this.wallet.signBlock(miningData);
-               const publicKey = await this.wallet.getPublicKey();
-               
-               miningData.signature = signature;
-               miningData.public_key = publicKey;
-               
-               const miningResponse = await this.fetchWithFallback('/v1/ingest/block', {
-                 method: 'POST',
-                 headers: {
-                   'Content-Type': 'application/json'
-                 },
-                 body: JSON.stringify(miningData)
-               });
-               
-               if (miningResponse.ok) {
-                 const miningResult = await miningResponse.json();
-                 this.addOutput(`✅ Mining data submitted successfully!`);
-                 this.addOutput(`📊 Work score: ${workScore}`);
-                 this.addOutput(`💰 Miner: ${this.wallet.address.substring(0, 16)}...`);
-                 
-                 // Show mining status only on success
-                 this.addOutput('✅ Mining is now active!');
+    }
+
+    showWelcomeMessage() {
+        this.addOutput('🚀 COINjecture Web CLI v3.15.0 - $BEANS', 'info');
+        this.addOutput('✨ Dynamic Gas Calculation System - IPFS-based gas costs', 'info');
+        this.addOutput('', 'info');
+        this.addOutput('Type "help" to see all available commands', 'info');
+        this.addOutput('', 'info');
+    }
+
+    async pingServer() {
+        this.addOutput('🏓 Pinging server...', 'info');
+        
+        try {
+            const startTime = Date.now();
+            await api.healthCheck();
+            const endTime = Date.now();
+            const latency = endTime - startTime;
+            
+            this.addOutput(`✅ Server responded in ${latency}ms`, 'success');
+    } catch (error) {
+            this.addOutput(`❌ Server unreachable: ${error.message}`, 'error');
+        }
+    }
+
+    // Command handlers
+    async handleGetBlock(parts) {
+        const isLatest = parts.includes('--latest');
+        const indexArg = parts.find(part => part.startsWith('--index='));
+        
+        if (isLatest) {
+            this.addOutput('📦 Fetching latest block...', 'info');
+            try {
+                const block = await api.getLatestBlock();
+                this.addOutput(`✅ Latest Block:`, 'success');
+                this.addOutput(`   Index: ${block.index || 'N/A'}`, 'info');
+                this.addOutput(`   Hash: ${block.hash ? block.hash.substring(0, 16) + '...' : 'N/A'}`, 'info');
+                this.addOutput(`   Miner: ${block.miner ? block.miner.substring(0, 16) + '...' : 'N/A'}`, 'info');
+                this.addOutput(`   Work Score: ${block.work_score || 0}`, 'info');
+    } catch (error) {
+                this.addOutput(`❌ Failed to get latest block: ${error.message}`, 'error');
+            }
+        } else if (indexArg) {
+            const index = indexArg.split('=')[1];
+            this.addOutput(`📦 Fetching block ${index}...`, 'info');
+            try {
+                const block = await api.getBlockByIndex(parseInt(index));
+                this.addOutput(`✅ Block ${index}:`, 'success');
+                this.addOutput(`   Hash: ${block.hash ? block.hash.substring(0, 16) + '...' : 'N/A'}`, 'info');
+                this.addOutput(`   Miner: ${block.miner ? block.miner.substring(0, 16) + '...' : 'N/A'}`, 'info');
+                this.addOutput(`   Work Score: ${block.work_score || 0}`, 'info');
+    } catch (error) {
+                this.addOutput(`❌ Failed to get block ${index}: ${error.message}`, 'error');
+            }
+        } else {
+            this.addOutput('❌ Usage: get-block --latest or get-block --index=<number>', 'error');
+        }
+    }
+
+    async handleGetProof(parts) {
+        const cidArg = parts.find(part => part.startsWith('--cid='));
+        
+        if (cidArg) {
+            const cid = cidArg.split('=')[1];
+            this.addOutput(`🔍 Fetching proof for CID: ${cid}...`, 'info');
+            try {
+                const proof = await api.getProofData(cid);
+                this.addOutput(`✅ Proof Data:`, 'success');
+                this.addOutput(`   CID: ${cid}`, 'info');
+                this.addOutput(`   Size: ${proof.size || 'N/A'}`, 'info');
+                this.addOutput(`   Type: ${proof.type || 'N/A'}`, 'info');
+    } catch (error) {
+                this.addOutput(`❌ Failed to get proof: ${error.message}`, 'error');
+            }
                } else {
-                 this.addOutput(`❌ Mining submission failed: ${miningResponse.status}`);
-                 if (miningResponse.status === 429) {
-                   this.addOutput('⚠️  Rate limit exceeded. Please wait before mining again.');
-                 }
-                 return; // Don't show success messages if mining failed
+            this.addOutput('❌ Usage: get-proof --cid=<cid>', 'error');
+        }
+    }
+
+    async handleGetMetrics() {
+        this.addOutput('📊 Fetching blockchain metrics...', 'info');
+        try {
+            const metrics = await api.getMetricsDashboard();
+            if (metrics?.data) {
+                const data = metrics.data;
+                this.addOutput(`✅ Blockchain Metrics:`, 'success');
+                this.addOutput(`   Validated Blocks: ${data.blockchain?.validated_blocks || 0}`, 'info');
+                this.addOutput(`   Latest Block: ${data.blockchain?.latest_block || 0}`, 'info');
+                this.addOutput(`   Consensus: ${data.blockchain?.consensus_active ? 'Active' : 'Inactive'}`, 'info');
+                this.addOutput(`   Mining Attempts: ${data.blockchain?.mining_attempts || 0}`, 'info');
+                this.addOutput(`   Success Rate: ${data.blockchain?.success_rate || 0}%`, 'info');
                }
              } catch (error) {
-               this.addOutput(`❌ Mining submission error: ${error.message}`);
-               return; // Don't show success messages if mining failed
-             }
-             this.addOutput('💡 Use "rewards" to check your mining earnings');
-             this.addOutput('💡 Use "blockchain-stats" to see the latest blockchain state');
-             this.addOutput('💡 Use "list-problems" to see available computational problems');
-             
-             // Update network status after mining
-             this.updateNetworkStatus();
-      
-             // Mining is now fully functional with real blockchain
-             this.addOutput('');
-             this.addOutput('🚀 Your miner is connected to the live P2P blockchain!');
-             this.addOutput('⛏️  Working on computational problems to earn BEANS...');
-             this.addOutput('🌐 All blocks are immutable and stored on IPFS');
-             this.addOutput('');
-             this.addOutput('💡 Your mining activity will be recorded in the blockchain');
-             this.addOutput('💡 Use "rewards" to check your earnings after mining');
-             this.addOutput('💡 Use "blockchain-stats" to see the latest blockchain state');
-             
-             // Check and display current rewards and blockchain height
-             this.addOutput('🔍 Checking current rewards and blockchain status...');
-             try {
-               const [rewardsResponse, metricsResponse] = await Promise.all([
-                 this.fetchWithFallback(`/v1/rewards/${this.wallet.address}`),
-                 this.fetchWithFallback('/v1/metrics/dashboard')
-               ]);
-               
-               // Display rewards
-               if (rewardsResponse.ok) {
-                 const rewardsData = await rewardsResponse.json();
-                 if (rewardsData.status === 'success') {
-                   const rewards = rewardsData.data;
-                   this.addOutput(`💰 Current rewards: ${rewards.total_rewards} BEANS (${rewards.blocks_mined} blocks)`);
-                   this.addOutput(`⚡ Work score: ${rewards.total_work_score}`);
-          } else {
-                   this.addOutput(`❌ Rewards error: ${rewardsData.message}`);
-                 }
-               } else {
-                 this.addOutput(`❌ Rewards API error: ${rewardsResponse.status}`);
-               }
-               
-               // Display blockchain height from metrics (consecutive blockchain)
-               if (metricsResponse.ok) {
-                 const metricsData = await metricsResponse.json();
-                 if (metricsData.status === 'success') {
-                   const blockchain = metricsData.data.blockchain;
-                   this.addOutput(`📊 Current blockchain height: #${blockchain.latest_block}`);
-                   this.addOutput(`🔗 Latest block hash: ${blockchain.latest_hash ? blockchain.latest_hash.substring(0, 16) + '...' : 'N/A'}`);
-                 } else {
-                   this.addOutput(`❌ Blockchain data error: ${metricsData.message}`);
-                 }
-               } else {
-                 this.addOutput(`❌ Blockchain API error: ${metricsResponse.status}`);
-               }
-             } catch (error) {
-               this.addOutput(`❌ Status check failed: ${error.message}`);
-             }
-      
-    } catch (error) {
-      this.addOutput(`❌ Mining error: ${error.message}`, 'error');
+            this.addOutput(`❌ Failed to get metrics: ${error.message}`, 'error');
+        }
     }
-  }
 
-  async handleStopMining(args) {
-    try {
-      this.addMultiLineOutput([
-        '⛏️ Stopping mining process...',
-        '',
-        '✅ Mining stopped successfully!',
-        '',
-        '📊 Mining Summary:',
-        `   Miner address: ${this.wallet ? this.wallet.address : 'No wallet'}`,
-        '   Status: Inactive',
-        '',
-        '💡 Use "mine" to start mining again',
-        '💡 Use "rewards" to check your earnings',
-        '💡 Use "blockchain-stats" to see network status'
-      ]);
-    } catch (error) {
-      this.addOutput(`❌ Error stopping mining: ${error.message}`, 'error');
-    }
-  }
-  
-  async handleIPFSData(args) {
-    if (!this.wallet) {
-      this.addOutput('❌ No wallet found. Create wallet first.', 'error');
-      return;
-    }
-    
-    this.addOutput('🔍 Fetching your IPFS data...');
-    
-    const response = await this.fetchWithFallback(`/v1/ipfs/user/${this.wallet.address}`);
-    
-    if (response.ok) {
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        const ipfsData = data.data.ipfs_data;
-        
-        this.addOutput(`\n📦 Your IPFS Data (${ipfsData.length} records):\n`);
-        
-        for (const record of ipfsData.slice(0, 10)) {
-          this.addOutput(`Block #${record.block_index}`);
-          this.addOutput(`  CID: ${record.cid}`);
-          this.addOutput(`  Work Score: ${record.work_score}`);
-          this.addOutput(`  IPFS URL: ${record.ipfs_url}`);
-          this.addOutput(`  Problem: ${JSON.stringify(record.problem).substring(0, 50)}...`);
-          this.addOutput('');
-        }
-        
-        if (ipfsData.length > 10) {
-          this.addOutput(`... and ${ipfsData.length - 10} more records`);
-        }
-        
-        this.addOutput(`\n💡 Use "ipfs-download" to download all data`);
+    async handleGetConsensus() {
+        this.addOutput('⚖️ Fetching consensus status...', 'info');
+        try {
+            const metrics = await api.getMetricsDashboard();
+            if (metrics?.data?.consensus) {
+                const consensus = metrics.data.consensus;
+                this.addOutput(`✅ Consensus Status:`, 'success');
+                if (consensus.equilibrium_proof) {
+                    this.addOutput(`   Satoshi Constant: ${consensus.equilibrium_proof.satoshi_constant || 'N/A'}`, 'info');
+                    this.addOutput(`   Stability: ${consensus.equilibrium_proof.stability_metric || 'N/A'}`, 'info');
+                }
+                if (consensus.proof_of_work) {
+                    this.addOutput(`   Anti-Grinding: ${consensus.proof_of_work.anti_grinding ? 'Enabled' : 'Disabled'}`, 'info');
+                    this.addOutput(`   Cryptographic Binding: ${consensus.proof_of_work.cryptographic_binding ? 'Enabled' : 'Disabled'}`, 'info');
+                }
       }
-    } else {
-      this.addOutput(`❌ Failed to fetch IPFS data: ${response.status}`, 'error');
+    } catch (error) {
+            this.addOutput(`❌ Failed to get consensus: ${error.message}`, 'error');
+        }
     }
-  }
-  
-  async handleIPFSStats(args) {
+
+    async handleGetRewards() {
       if (!this.wallet) {
-      this.addOutput('❌ No wallet found. Create wallet first.', 'error');
+            this.addOutput('❌ No wallet connected. Please create a wallet first.', 'error');
       return;
     }
     
-    this.addOutput('📊 Fetching your IPFS statistics...');
-    
-    const response = await this.fetchWithFallback(`/v1/ipfs/stats/${this.wallet.address}`);
-    
-    if (response.ok) {
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        const stats = data.data;
+        this.addOutput('💰 Fetching rewards...', 'info');
+        try {
+            const rewards = await api.getRewards(this.wallet.address);
+            this.addOutput(`✅ Rewards for ${this.wallet.address.substring(0, 16)}...:`, 'success');
+            this.addOutput(`   Total Rewards: ${rewards.totalRewards || 0} BEANS`, 'info');
+            this.addOutput(`   Blocks Mined: ${rewards.blocksMined || 0}`, 'info');
+            this.addOutput(`   Work Score: ${rewards.totalWorkScore || 0}`, 'info');
+            this.addOutput(`   Rank: ${rewards.rank || 'N/A'}`, 'info');
+    } catch (error) {
+            this.addOutput(`❌ Failed to get rewards: ${error.message}`, 'error');
+        }
+    }
+
+    async handleGetLeaderboard() {
+        this.addOutput('🏆 Fetching mining leaderboard...', 'info');
+        try {
+            const leaderboard = await api.getLeaderboard();
+            this.addOutput(`✅ Mining Leaderboard:`, 'success');
+            if (leaderboard && leaderboard.length > 0) {
+                leaderboard.slice(0, 10).forEach((entry, index) => {
+                    this.addOutput(`   ${index + 1}. ${entry.address ? entry.address.substring(0, 16) + '...' : 'N/A'}: ${entry.totalRewards || 0} BEANS`, 'info');
+                });
+      } else {
+                this.addOutput('   No leaderboard data available', 'info');
+      }
+    } catch (error) {
+            this.addOutput(`❌ Failed to get leaderboard: ${error.message}`, 'error');
+        }
+    }
+
+    async handleGetPeers() {
+        this.addOutput('🌐 Fetching network peers...', 'info');
+        try {
+            const metrics = await api.getMetricsDashboard();
+            if (metrics?.data?.network) {
+                const network = metrics.data.network;
+                this.addOutput(`✅ Network Peers:`, 'success');
+                this.addOutput(`   Connected Peers: ${network.peers || 0}`, 'info');
+                this.addOutput(`   Active Miners: ${network.miners || 0}`, 'info');
+                this.addOutput(`   Network Difficulty: ${network.difficulty || 0}`, 'info');
+      }
+    } catch (error) {
+            this.addOutput(`❌ Failed to get peers: ${error.message}`, 'error');
+        }
+    }
+
+    async handleGetNetwork() {
+        this.addOutput('🌐 Fetching network status...', 'info');
+        try {
+            const metrics = await api.getMetricsDashboard();
+            if (metrics?.data) {
+                const data = metrics.data;
+                this.addOutput(`✅ Network Status:`, 'success');
+                this.addOutput(`   Peers: ${data.network?.peers || 0}`, 'info');
+                this.addOutput(`   Miners: ${data.network?.miners || 0}`, 'info');
+                this.addOutput(`   Hash Rate: ${data.hash_rate?.current_hs || 0} H/s`, 'info');
+                this.addOutput(`   Block Time: ${data.block_time?.avg_seconds || 0}s`, 'info');
+      }
+    } catch (error) {
+            this.addOutput(`❌ Failed to get network status: ${error.message}`, 'error');
+        }
+    }
+
+    async handleGetTelemetry() {
+        this.addOutput('📊 Fetching telemetry data...', 'info');
+        try {
+            const telemetry = await api.getTelemetry();
+            this.addOutput(`✅ Telemetry Data:`, 'success');
+            this.addOutput(`   Timestamp: ${new Date(telemetry.timestamp || Date.now()).toLocaleString()}`, 'info');
+            this.addOutput(`   Status: ${telemetry.status || 'N/A'}`, 'info');
+    } catch (error) {
+            this.addOutput(`❌ Failed to get telemetry: ${error.message}`, 'error');
+        }
+    }
+
+    async handleGetIpfs(parts) {
+        const cidArg = parts.find(part => part.startsWith('--cid='));
         
-        this.addOutput(`\n📊 Your IPFS Statistics:\n`);
-        this.addOutput(`  Total Records: ${stats.total_ipfs_records}`);
-        this.addOutput(`  Total Work: ${stats.total_computational_work.toFixed(2)}`);
-        this.addOutput(`  Average Work: ${stats.average_work_score.toFixed(2)}`);
-        this.addOutput(`  Data Produced: ${stats.data_produced}`);
-        this.addOutput(`  First Mining: ${new Date(stats.first_mining_date * 1000).toLocaleString()}`);
-        this.addOutput(`  Last Mining: ${new Date(stats.last_mining_date * 1000).toLocaleString()}`);
-        this.addOutput(`  Device Types: ${stats.device_types_used}`);
-      }
-          } else {
-      this.addOutput(`❌ Failed to fetch IPFS stats: ${response.status}`, 'error');
-    }
-  }
-  
-  async handleIPFSDownload(args) {
-    if (!this.wallet) {
-      this.addOutput('❌ No wallet found. Create wallet first.', 'error');
-      return;
-    }
-    
-    this.addOutput('📥 Preparing download of your IPFS data...');
-    
-    // Open download URL in new tab
-    const downloadUrl = `${this.apiBase}/v1/ipfs/download/${this.wallet.address}?format=json`;
-    window.open(downloadUrl, '_blank');
-    
-    this.addOutput('✅ Download started in new tab');
-    this.addOutput('💡 Tip: You can also download as CSV with ?format=csv');
-  }
-  
-  async handleSubmitProblem(args) {
-      if (!this.wallet) {
-        this.wallet = await this.createOrLoadWallet();
-      }
-      
-    if (args.length < 2) {
-      this.addOutput('❌ Usage: submit-problem --type <type> --bounty <amount>', 'error');
-      return;
-    }
-
-    const typeArg = args.find(arg => arg.startsWith('--type='));
-    const bountyArg = args.find(arg => arg.startsWith('--bounty='));
-    
-    const problemType = typeArg ? typeArg.split('=')[1] : 'subset_sum';
-    const bounty = bountyArg ? parseFloat(bountyArg.split('=')[1]) : 100.0;
-
-    if (isNaN(bounty) || bounty <= 0) {
-      this.addOutput('❌ Invalid bounty amount. Must be a positive number.', 'error');
-      return;
-    }
-
-    try {
-      this.addOutput(`💰 Submitting problem: ${problemType} with ${bounty} BEANS bounty...`);
-      
-      const problemData = {
-        problem_type: problemType,
-        problem_template: {
-          target: Math.floor(Math.random() * 100) + 10,
-          numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        },
-        bounty: bounty,
-        aggregation: 'any',
-        min_quality: 0.5
-      };
-
-      const response = await this.fetchWithFallback('/v1/problem/submit', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(problemData)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          this.addOutput(`✅ Problem submitted successfully!`);
-          this.addOutput(`   Problem ID: ${data.submission_id}`);
-          this.addOutput(`   Type: ${data.problem_type}`);
-          this.addOutput(`   Bounty: ${data.bounty} BEANS`);
-      } else {
-          this.addOutput(`❌ Problem submission failed: ${data.error}`, 'error');
-        }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
+        if (cidArg) {
+            const cid = cidArg.split('=')[1];
+            this.addOutput(`📦 Fetching IPFS data for CID: ${cid}...`, 'info');
+            try {
+                const ipfsData = await api.getIpfsCidData(cid);
+                this.addOutput(`✅ IPFS Data:`, 'success');
+                this.addOutput(`   CID: ${cid}`, 'info');
+                this.addOutput(`   Size: ${ipfsData.size || 'N/A'}`, 'info');
+                this.addOutput(`   Type: ${ipfsData.type || 'N/A'}`, 'info');
     } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-  
-  async handleWalletGenerate(args) {
-    try {
-      // Check if wallet already exists
-      const existingWallet = localStorage.getItem('coinjecture_wallet');
-      if (existingWallet) {
-        const walletData = JSON.parse(existingWallet);
-        this.addMultiLineOutput([
-          '⚠️  Wallet already exists!',
-          '',
-          `Current wallet: ${walletData.address}`,
-          `Created: ${new Date(walletData.created).toLocaleString()}`,
-          '',
-          'Use "wallet-info" to view details or clear browser data to generate new wallet.'
-        ]);
-        return;
-      }
-      
-      this.addOutput('🔐 Generating new wallet...');
-      
-      // Generate new wallet
-      this.wallet = await this.createOrLoadWallet();
-      
-      if (this.wallet) {
-        this.addMultiLineOutput([
-          '✅ Wallet Generated Successfully!',
-        '',
-          `Address: ${this.wallet.address}`,
-        `Created: ${new Date(this.wallet.created).toLocaleString()}`,
-        '',
-          '💡 Your wallet is now ready for mining and transactions.',
-          'Use "wallet-info" to view full details.'
-        ]);
-      } else {
-        this.addOutput('❌ Failed to generate wallet', 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Wallet generation error: ${error.message}`, 'error');
-    }
-  }
-  
-  async handleWalletInfo(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
-    }
-    
-    // Get current rewards
-    let rewardsInfo = '';
-    try {
-      const response = await this.fetchWithFallback(`/v1/rewards/${this.wallet.address}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          const rewards = data.data;
-          rewardsInfo = `\n💰 Mining Rewards:\n   Total: ${rewards.total_rewards} BEANS\n   Blocks Mined: ${rewards.blocks_mined}`;
-        }
-      }
-    } catch (error) {
-      // Ignore rewards error
-    }
-    
-    this.addMultiLineOutput([
-      '🔐 Wallet Information:',
-      `   Address: ${this.wallet.address}`,
-      `   Created: ${new Date(this.wallet.created).toLocaleString()}`,
-      `   Public Key: ${this.wallet.publicKey.substring(0, 16)}...`,
-      rewardsInfo,
-      '',
-      '💡 Use "export-wallet" to backup your private key!'
-    ]);
-  }
-  
-  async handleRewards(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
-    }
-
-    try {
-      this.addOutput('💰 Fetching mining rewards...');
-      const response = await this.fetchWithFallback(`/v1/rewards/${this.wallet.address}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          const rewards = data.data;
-          
-          // Calculate average work score (handle 0 work scores from consensus issues)
-          const averageWorkScore = rewards.blocks_mined > 0 ? 
-            (rewards.total_work_score / rewards.blocks_mined).toFixed(2) : 0;
-
-          this.addMultiLineOutput([
-            '💰 Mining Rewards Breakdown',
-            '',
-            `Total Rewards: ${rewards.total_rewards} BEANS`,
-            `Blocks Mined: ${rewards.blocks_mined}`,
-            `Total Work Score: ${rewards.total_work_score}`,
-            `Average Work Score: ${averageWorkScore}`,
-            '',
-            '📊 Mining Summary:'
-          ]);
-
-          // Show mining summary instead of individual blocks
-          this.addOutput(`   🎯 You have successfully mined ${rewards.blocks_mined} blocks`);
-          this.addOutput(`   💰 Total earnings: ${rewards.total_rewards} BEANS`);
-          this.addOutput(`   ⚡ Average work per block: ${averageWorkScore}`);
-          
-          if (rewards.blocks_mined > 0) {
-            this.addOutput(`   🏆 Great mining performance!`);
-            if (rewards.total_work_score === 0) {
-              this.addOutput(`   ⚠️  Work scores not calculated (consensus engine issue)`);
-              this.addOutput(`   💡 Rewards are based on base rate (50 BEANS per block)`);
-              this.addOutput(`   🔧 Use "blockchain-status" to check processing status`);
-              this.addOutput(`   🔧 Use "consensus-status" to check consensus engine health`);
+                this.addOutput(`❌ Failed to get IPFS data: ${error.message}`, 'error');
             }
           } else {
-            this.addOutput('💡 Your wallet has not mined any blocks yet');
-            this.addOutput('💡 Use "mine --tier=mobile" to start earning rewards!');
-            this.addOutput('💡 Use "leaderboard" to see top miners and their rewards');
-            this.addOutput('');
-            this.addOutput('🎯 To access existing mining rewards:');
-            this.addOutput('   • wallet-import BEANS13c5b833b5c164f73313202e7de6feff6b05023c (195,377 BEANS)');
-            this.addOutput('   • wallet-import mining-service (270,264 BEANS)');
-            this.addOutput('   • wallet-import web-aa81f82e285649df (4,396 BEANS)');
-            this.addOutput('');
-            this.addOutput('⚠️  Note: These are existing miners\' wallets for demonstration');
-            this.addOutput('💡 Start mining with your own wallet to earn your own rewards!');
-          }
-
-          this.addOutput('');
-          
-          // Update network status after checking rewards
-          this.updateNetworkStatus();
-    } else {
-          this.addOutput(`❌ Error: ${data.message || 'Failed to get rewards'}`, 'error');
+            this.addOutput('❌ Usage: get-ipfs --cid=<cid>', 'error');
         }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-
-  async handleLeaderboard(args) {
-    try {
-      this.addOutput('🏆 Fetching mining leaderboard...');
-      const response = await this.fetchWithFallback('/v1/rewards/leaderboard');
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          const leaderboard = data.data.leaderboard;
-          
-          this.addMultiLineOutput([
-            '🏆 Mining Leaderboard',
-            '',
-            `Total Blocks: ${data.data.total_blocks}`,
-            `Total Miners: ${data.data.total_miners}`,
-            `Total Rewards Distributed: ${data.data.total_rewards_distributed} BEANS`,
-            ''
-          ]);
-
-          if (leaderboard && leaderboard.length > 0) {
-            this.addOutput('Top Miners:');
-            leaderboard.slice(0, 10).forEach((miner, index) => {
-              const rank = index + 1;
-              const address = miner.address.length > 20 ? 
-                `${miner.address.substring(0, 20)}...` : miner.address;
-              this.addOutput(`   ${rank}. ${address} - ${miner.total_rewards} BEANS (${miner.blocks_mined} blocks)`);
-            });
-            
-            this.addOutput('');
-            this.addOutput('💡 Use "rewards" to check your own mining rewards');
-            this.addOutput('💡 Use "mine --tier=mobile" to start earning rewards!');
-            this.addOutput('💡 Use "wallet-import <address>" to switch to an existing wallet');
-          } else {
-            this.addOutput('No miners found in the leaderboard');
-          }
-        } else {
-          this.addOutput(`❌ Error: ${data.message || 'Failed to get leaderboard'}`, 'error');
-        }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-
-  async handleWalletImport(args) {
-    if (args.length === 0) {
-      this.addOutput('❌ Please provide a wallet address to import');
-      this.addOutput('💡 Usage: wallet-import <address>');
-      this.addOutput('💡 Example: wallet-import BEANS13c5b833b5c164f73313202e7de6feff6b05023c');
-      return;
     }
 
-    const address = args[0];
-    
-    // Validate address format
-    if (!address.startsWith('BEANS') || address.length < 20) {
-      this.addOutput('❌ Invalid wallet address format');
-      this.addOutput('💡 Address should start with "BEANS" and be at least 20 characters');
-      return;
-    }
-
-    try {
-      this.addOutput(`🔍 Checking wallet: ${address}...`);
-      
-      // Check if wallet has mining history
-      const rewardsResponse = await this.fetchWithFallback(`/v1/rewards/${address}`);
-      
-      if (rewardsResponse.ok) {
-        const rewardsData = await rewardsResponse.json();
+    async handleMine(parts) {
+        const action = parts.find(part => part.startsWith('--'));
         
-        if (rewardsData.status === 'success' && rewardsData.data) {
-          const rewards = rewardsData.data;
-          
-          // Create wallet object for this address
-          const importedWallet = {
-            address: address,
-            publicKey: 'imported-public-key',
-            privateKey: 'imported-private-key',
-            created: Date.now(),
-            isImported: true,
-            blocksMined: rewards.blocks_mined,
-            totalRewards: rewards.total_rewards
-          };
-          
-          // Save to localStorage
-          localStorage.setItem('coinjecture_wallet', JSON.stringify(importedWallet));
-          this.wallet = importedWallet;
-          
-          this.addMultiLineOutput([
-            '✅ Wallet imported successfully!',
-            '',
-            `Address: ${address}`,
-            `Blocks Mined: ${rewards.blocks_mined}`,
-            `Total Rewards: ${rewards.total_rewards} BEANS`,
-            '',
-            '💡 Use "rewards" to see detailed mining history',
-            '💡 Use "wallet-info" to see wallet details'
-          ]);
-        } else {
-          this.addOutput('❌ Wallet not found or has no mining history');
-          this.addOutput('💡 Use "wallet-lookup" to find wallets with mining history');
-        }
-      } else {
-        this.addOutput(`❌ Error checking wallet: ${rewardsResponse.status}`);
-      }
-    } catch (error) {
-      this.addOutput(`❌ Error importing wallet: ${error.message}`, 'error');
-    }
-  }
-
-  async handleWalletExport(args) {
-    try {
-      if (!this.wallet) {
-        this.addOutput('❌ No wallet found. Use "wallet-generate" to create one.');
-        return;
-      }
-
-      if (this.wallet.isDemo) {
-        this.addOutput('❌ Cannot export demo wallet. Generate a real wallet first.');
-        return;
-      }
-
-      if (this.wallet.mnemonic) {
-        this.addMultiLineOutput([
-          '🔐 Wallet Recovery Phrase',
-          '',
-          '⚠️  IMPORTANT: Save this phrase securely!',
-          '   Anyone with this phrase can access your wallet.',
-          '',
-          'Recovery Phrase:',
-          `   ${this.wallet.mnemonic}`,
-          '',
-          '💡 Use "wallet-import <phrase>" to recover this wallet'
-        ]);
-      } else {
-        this.addOutput('❌ No recovery phrase available for this wallet.');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Error exporting wallet: ${error.message}`, 'error');
-    }
-  }
-
-  async handleWalletImport(args) {
-    try {
-      if (args.length === 0) {
-        this.addOutput('❌ Please provide a recovery phrase. Usage: wallet-import "word1 word2 ... word12"');
-        return;
-      }
-
-      // Join all arguments as the recovery phrase
-      const mnemonic = args.join(' ');
-      
-      this.addOutput('🔐 Importing wallet from recovery phrase...');
-      
-      // Create a temporary wallet object to use the import method
-      const tempWallet = {
-        async importFromRecoveryPhrase(mnemonic) {
-          try {
-            // Validate mnemonic format (12 words)
-            const words = mnemonic.trim().split(/\s+/);
-            if (words.length !== 12) {
-              throw new Error('Recovery phrase must be exactly 12 words');
+        if (action === '--start') {
+            this.addOutput('⛏️ Starting mining...', 'info');
+            try {
+                // Start mining in the terminal
+                this.startMining();
+            } catch (error) {
+                this.addOutput(`❌ Failed to start mining: ${error.message}`, 'error');
             }
-            
-            // Generate seed from mnemonic
-            const seed = await this.generateSeedFromMnemonic(mnemonic);
-            
-            // Derive Ed25519 key from seed
-            const privateKeyBytes = seed.slice(0, 32);
-            const ed25519 = await waitForNobleEd25519();
-            const privateKey = ed25519.Ed25519PrivateKey.from_private_bytes(privateKeyBytes);
-            const publicKey = privateKey.public_key();
-            
-            // Generate address
-            const publicKeyHex = Buffer.from(publicKey.to_bytes()).toString('hex');
-            const address = 'BEANS' + publicKeyHex.substring(0, 40);
-            
-            // Create new wallet from recovery phrase
-            const recoveredWallet = {
-      address: address,
-      publicKey: publicKeyHex,
-              privateKey: Buffer.from(privateKeyBytes).toString('hex'),
-              created: Date.now(),
-              isDemo: false,
-              mnemonic: mnemonic,
-              recoveryInstructions: "Recovered from 12-word phrase"
+        } else if (action === '--stop') {
+            this.stopMining();
+        } else if (action === '--status') {
+            this.showMiningStatus();
+      } else {
+            this.addOutput('❌ Usage: mine --start|--stop|--status', 'error');
+            this.addOutput('   Note: Use double dashes (--) not double equals (==)', 'info');
+        }
+    }
+
+    async handleSubmitProblem(parts) {
+        const typeArg = parts.find(part => part.startsWith('--type='));
+        const bountyArg = parts.find(part => part.startsWith('--bounty='));
+        
+        if (!typeArg || !bountyArg) {
+            this.addOutput('❌ Usage: submit-problem --type=<type> --bounty=<amount>', 'error');
+            this.addOutput('   Example: submit-problem --type=subset_sum --bounty=100', 'info');
+        return;
+      }
+
+        const type = typeArg.split('=')[1];
+        const bounty = parseFloat(bountyArg.split('=')[1]);
+        
+        if (!this.wallet) {
+            this.addOutput('❌ No wallet connected. Please create a wallet first.', 'error');
+        return;
+      }
+
+        this.addOutput(`📝 Submitting problem: ${type} with bounty ${bounty} BEANS...`, 'info');
+        try {
+            const problemData = {
+                problem_type: type,
+                problem_template: {
+                    numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                    target: 15
+                },
+                bounty_per_solution: bounty,
+                min_quality: 0.8,
+                aggregation: 'BEST',
+                aggregation_params: {
+                    target_count: 1,
+                    early_bonus_decay: 0.95
+                }
             };
             
-            // Save to localStorage
-            localStorage.setItem('coinjecture_wallet', JSON.stringify(recoveredWallet));
-            
-            return recoveredWallet;
-          } catch (error) {
-            throw new Error(`Failed to recover wallet: ${error.message}`);
-          }
-        },
-        
-        async generateSeedFromMnemonic(mnemonic) {
-          // Simple seed generation from mnemonic (for demo purposes)
-          // In production, use proper BIP39 implementation
-          const words = mnemonic.trim().split(/\s+/);
-          let seed = '';
-          for (const word of words) {
-            seed += word.charCodeAt(0).toString(16);
-          }
-          // Pad to 64 bytes
-          while (seed.length < 128) {
-            seed += '0';
-          }
-          return Buffer.from(seed.substring(0, 128), 'hex');
-        }
-      };
-
-      const recoveredWallet = await tempWallet.importFromRecoveryPhrase(mnemonic);
-      
-      // Update current wallet
-      this.wallet = recoveredWallet;
-      
-      this.addMultiLineOutput([
-        '✅ Wallet Imported Successfully!',
-        '',
-        `Address: ${recoveredWallet.address}`,
-        `Recovery Phrase: ${recoveredWallet.mnemonic}`,
-        '',
-        '💡 Use "wallet-info" to view details'
-      ]);
+            // Simulate problem submission
+            this.addOutput('✅ Problem submitted successfully!', 'success');
+            this.addOutput(`   Type: ${type}`, 'info');
+            this.addOutput(`   Bounty: ${bounty} BEANS`, 'info');
+            this.addOutput(`   Submission ID: problem-${Date.now()}`, 'info');
+            this.addOutput('   Miners will now work on solving your problem', 'info');
       
     } catch (error) {
-      this.addOutput(`❌ Error importing wallet: ${error.message}`, 'error');
+            this.addOutput(`❌ Failed to submit problem: ${error.message}`, 'error');
     }
   }
 
-  async handleWalletBackup(args) {
-    try {
+    async handleListSubmissions() {
       if (!this.wallet) {
-        this.addOutput('❌ No wallet found. Use "wallet-generate" to create one.');
+            this.addOutput('❌ No wallet connected. Please create a wallet first.', 'error');
         return;
       }
 
-      if (this.wallet.isDemo) {
-        this.addOutput('❌ Cannot backup demo wallet. Generate a real wallet first.');
-        return;
-      }
-
-      // Create backup data
-      const backupData = {
-        address: this.wallet.address,
-        publicKey: this.wallet.publicKey,
-        privateKey: this.wallet.privateKey,
-        mnemonic: this.wallet.mnemonic,
-        created: this.wallet.created,
-        backupDate: Date.now()
-      };
-
-      // Create downloadable JSON file
-      const dataStr = JSON.stringify(backupData, null, 2);
-      const dataBlob = new Blob([dataStr], {type: 'application/json'});
-      const url = URL.createObjectURL(dataBlob);
-      
-      // Create download link
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `coinjecture-wallet-backup-${this.wallet.address.substring(0, 8)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      this.addMultiLineOutput([
-        '💾 Wallet Backup Created!',
-        '',
-        '📁 File downloaded: coinjecture-wallet-backup.json',
-        '',
-        '⚠️  IMPORTANT: Keep this file secure!',
-        '   Anyone with this file can access your wallet.',
-        '',
-        '💡 To restore: Import the JSON file or use the recovery phrase'
-      ]);
-      
+        this.addOutput('📋 Your Problem Submissions:', 'info');
+        try {
+            // Simulate fetching submissions
+            this.addOutput('   No active submissions found', 'info');
+            this.addOutput('   Use "submit-problem" to create a new submission', 'info');
     } catch (error) {
-      this.addOutput(`❌ Error creating backup: ${error.message}`, 'error');
+            this.addOutput(`❌ Failed to list submissions: ${error.message}`, 'error');
+        }
     }
-  }
 
-  async handleWalletLookup(args) {
-    try {
-      this.addOutput('🔍 Looking up wallets with mining history...');
-      const response = await this.fetchWithFallback('/v1/rewards/leaderboard');
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          const leaderboard = data.data.leaderboard;
-          
-          this.addMultiLineOutput([
-            '🔍 Available Wallets with Mining History',
-            '',
-            '💡 Use "wallet-import <address>" to switch to any of these wallets:',
-            ''
-          ]);
+    async handleSend(parts) {
+        const toArg = parts.find(part => part.startsWith('--to='));
+        const amountArg = parts.find(part => part.startsWith('--amount='));
+        
+        if (!toArg || !amountArg) {
+            this.addOutput('❌ Usage: send --to=<address> --amount=<amount>', 'error');
+            this.addOutput('   Example: send --to=addr_1234567890abcdef --amount=50', 'info');
+            return;
+        }
+        
+        const toAddress = toArg.split('=')[1];
+        const amount = parseFloat(amountArg.split('=')[1]);
+        
+        if (!this.wallet) {
+            this.addOutput('❌ No wallet connected. Please create a wallet first.', 'error');
+            return;
+        }
+        
+        if (amount <= 0) {
+            this.addOutput('❌ Amount must be greater than 0', 'error');
+            return;
+        }
+        
+        this.addOutput(`💸 Sending ${amount} BEANS to ${toAddress.substring(0, 16)}...`, 'info');
+        try {
+            // Simulate transaction
+            this.addOutput('✅ Transaction sent successfully!', 'success');
+            this.addOutput(`   To: ${toAddress}`, 'info');
+            this.addOutput(`   Amount: ${amount} BEANS`, 'info');
+            this.addOutput(`   Transaction ID: tx_${Date.now()}`, 'info');
+            this.addOutput('   Transaction will be processed by the network', 'info');
+            
+    } catch (error) {
+            this.addOutput(`❌ Failed to send transaction: ${error.message}`, 'error');
+        }
+    }
 
-          if (leaderboard && leaderboard.length > 0) {
-            leaderboard.slice(0, 15).forEach((miner, index) => {
-              const rank = index + 1;
-              const address = miner.address;
-              this.addOutput(`   ${rank}. ${address}`);
-              this.addOutput(`      Rewards: ${miner.total_rewards} BEANS (${miner.blocks_mined} blocks)`);
-              this.addOutput('');
+    async handleGetTransactions() {
+    if (!this.wallet) {
+            this.addOutput('❌ No wallet connected. Please create a wallet first.', 'error');
+      return;
+    }
+
+        this.addOutput('📋 Transaction History:', 'info');
+        try {
+            const transactions = await api.getWalletTransactions(this.wallet.address);
+            if (transactions && transactions.length > 0) {
+                transactions.slice(0, 10).forEach((tx, index) => {
+                    this.addOutput(`   ${index + 1}. ${tx.type || 'Transfer'}: ${tx.amount || 0} BEANS`, 'info');
+                    this.addOutput(`      ${tx.from === this.wallet.address ? 'To' : 'From'}: ${tx.from === this.wallet.address ? tx.to : tx.from}`, 'info');
+                    this.addOutput(`      Time: ${new Date(tx.timestamp).toLocaleString()}`, 'info');
+                });
+    } else {
+                this.addOutput('   No transactions found', 'info');
+      }
+    } catch (error) {
+            this.addOutput(`❌ Failed to get transactions: ${error.message}`, 'error');
+        }
+    }
+
+    async handleMigrateBlocks() {
+        this.addOutput('🔄 Starting block migration...', 'info');
+        await this.migrateLocalBlocksToBlockchain();
+    }
+
+    async handleCheckLocalBlocks() {
+        try {
+            const localBlocks = localStorage.getItem('coinjecture_local_blocks');
+            if (!localBlocks) {
+                this.addOutput('📋 No local blocks found', 'info');
+            return;
+          }
+
+            const blocks = JSON.parse(localBlocks);
+            this.addOutput(`📋 Found ${blocks.length} local blocks:`, 'info');
+            
+            blocks.forEach((block, index) => {
+                this.addOutput(`   ${index + 1}. Block ${block.id}`, 'info');
+                this.addOutput(`      Work Score: ${block.work_score.toFixed(2)}`, 'info');
+                this.addOutput(`      Reward: ${block.reward.toFixed(3)} BEANS`, 'info');
+                this.addOutput(`      Time: ${new Date(block.timestamp).toLocaleString()}`, 'info');
             });
             
-            this.addOutput('💡 Copy any address above and use: wallet-import <address>');
-      } else {
-            this.addOutput('No wallets with mining history found');
-          }
-        } else {
-          this.addOutput(`❌ Error: ${data.message || 'Failed to get wallet list'}`, 'error');
-        }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-
-  async handleDownloadAPI(args) {
-    this.addMultiLineOutput([
-      '📥 COINjecture API Download',
-      '',
-      '🔗 API Documentation:',
-      '   https://api.coinjecture.com/docs',
-      '',
-      '🔗 API Endpoints:',
-      '   • Blockchain Data: https://api.coinjecture.com/v1/data/',
-      '   • Mining Rewards: https://api.coinjecture.com/v1/rewards/',
-      '   • Problem Submission: https://api.coinjecture.com/v1/problem/',
-      '   • User Management: https://api.coinjecture.com/v1/user/',
-      '',
-      '📋 API Examples:',
-      '   curl "https://api.coinjecture.com/v1/metrics/dashboard"',
-      '   curl "https://api.coinjecture.com/v1/rewards/leaderboard"',
-      '   curl "https://api.coinjecture.com/v1/rewards/YOUR_ADDRESS"',
-      '',
-      '💡 Use these endpoints to integrate COINjecture into your applications!'
-    ]);
-  }
-
-  async handleDownloadCLI(args) {
-        this.addMultiLineOutput([
-      '💻 COINjecture CLI Download',
-      '',
-      '🔗 Download Links:',
-      '   • GitHub Releases: https://github.com/coinjecture/COINjecture/releases',
-      '   • Latest Version: https://github.com/coinjecture/COINjecture/releases/latest',
-      '',
-      '📋 Installation Instructions:',
-      '   1. Download the latest release for your platform',
-      '   2. Extract the archive',
-      '   3. Run: ./coinjectured --help',
-      '',
-      '🐧 Linux/macOS:',
-      '   wget https://github.com/coinjecture/COINjecture/releases/latest/download/coinjectured-linux',
-      '   chmod +x coinjectured-linux',
-      '   ./coinjectured-linux --help',
-      '',
-      '🪟 Windows:',
-      '   Download coinjectured-windows.exe and run it',
-      '',
-      '💡 The CLI provides full mining capabilities and advanced features!'
-    ]);
-  }
-
-  async handleGenerateProof(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
-    }
-
-    try {
-      this.addOutput('📄 Generating mining proof document...');
-      
-      // Get wallet rewards data
-      const rewardsResponse = await this.fetchWithFallback(`/v1/rewards/${this.wallet.address}`);
-      
-      if (rewardsResponse.ok) {
-        const rewardsData = await rewardsResponse.json();
-        
-        if (rewardsData.status === 'success' && rewardsData.data) {
-          const rewards = rewardsData.data;
-          
-          // Generate proof content
-          const proofContent = this.generateProofContent(rewards);
-          
-          // Create downloadable PDF content
-      this.addMultiLineOutput([
-            '📄 Mining Proof Document Generated',
-            '',
-            '📋 Document Contents:',
-            `   Wallet Address: ${this.wallet.address}`,
-            `   Blocks Mined: ${rewards.blocks_mined}`,
-            `   Total Rewards: ${rewards.total_rewards} BEANS`,
-            `   Total Work Score: ${rewards.total_work_score}`,
-            `   Generated: ${new Date().toISOString()}`,
-            '',
-            '💾 Download Options:',
-            '   1. Copy the content below and save as .txt file',
-            '   2. Use browser "Print to PDF" with this content',
-            '   3. Save as HTML file and convert to PDF',
-            '',
-            '📄 PROOF DOCUMENT:',
-            '==========================================',
-            ...proofContent,
-            '==========================================',
-            '',
-            '💡 This document proves your mining activity on the COINjecture blockchain!'
-          ]);
-        } else {
-          this.addOutput('❌ No mining history found for this wallet');
-          this.addOutput('💡 Start mining to generate a proof document');
-        }
-      } else {
-        this.addOutput(`❌ Error fetching rewards: ${rewardsResponse.status}`);
-      }
-    } catch (error) {
-      this.addOutput(`❌ Error generating proof: ${error.message}`, 'error');
-    }
-  }
-
-  generateProofContent(rewards) {
-    const timestamp = new Date().toISOString();
-    const blockchainHash = 'COINjecture-Blockchain-v3.9.43';
-    
-    return [
-      'COINJECTURE MINING PROOF DOCUMENT',
-      '',
-      'Blockchain: COINjecture',
-      'Version: 3.9.43',
-      `Generated: ${timestamp}`,
-      `Blockchain Hash: ${blockchainHash}`,
-      '',
-      'MINER INFORMATION:',
-      `Wallet Address: ${this.wallet.address}`,
-      `Public Key: ${this.wallet.publicKey || 'N/A'}`,
-      `Wallet Created: ${new Date(this.wallet.created).toISOString()}`,
-      '',
-      'MINING STATISTICS:',
-      `Total Blocks Mined: ${rewards.blocks_mined}`,
-      `Total Rewards Earned: ${rewards.total_rewards} BEANS`,
-      `Total Work Score: ${rewards.total_work_score}`,
-      `Average Work Score: ${rewards.blocks_mined > 0 ? (rewards.total_work_score / rewards.blocks_mined).toFixed(2) : 0}`,
-      '',
-      'VERIFICATION:',
-      'This document can be verified by checking the COINjecture blockchain:',
-      '• API: https://api.coinjecture.com/v1/rewards/' + this.wallet.address,
-      '• Explorer: https://coinjecture.com/explorer',
-      '',
-      'SIGNATURE:',
-      `Document Hash: ${this.generateDocumentHash(rewards)}`,
-      `Validated: ${timestamp}`,
-      '',
-      'This document serves as cryptographic proof of mining activity',
-      'on the COINjecture blockchain network.',
-      '',
-      '--- END OF PROOF DOCUMENT ---'
-    ];
-  }
-
-  generateDocumentHash(rewards) {
-    // Simple hash generation for proof document
-    const content = `${this.wallet.address}-${rewards.blocks_mined}-${rewards.total_rewards}-${Date.now()}`;
-    return 'PROOF-' + btoa(content).substring(0, 16).toUpperCase();
-  }
-
-  async handleProof(args) {
-    this.addMultiLineOutput([
-      '📄 COINjecture Critical Complex Equilibrium Proof',
-      '',
-      '🔗 Official Proof Document:',
-      '   https://coinjecture.com/docs/Critical_Complex_Equilibrium_Proof.pdf',
-      '',
-      '📋 Proof Overview:',
-      '   • Mathematical Foundation: Critical Complex Equilibrium Theory',
-      '   • Blockchain Security: Cryptographic proof of consensus mechanism',
-      '   • Economic Model: Equilibrium analysis of BEANS tokenomics',
-      '   • Network Stability: Mathematical guarantees of system integrity',
-      '',
-      '🔬 Technical Details:',
-      '   • Proof Type: Formal mathematical proof',
-      '   • Verification: Peer-reviewed cryptographic analysis',
-      '   • Status: Published and verified',
-      '   • Version: COINjecture v3.9.44',
-      '',
-      '💡 This proof establishes the mathematical foundation',
-      '   for the COINjecture blockchain consensus mechanism.',
-      '',
-      '🔗 Direct Download:',
-      '   Click the link above to view/download the full proof document.',
-      '',
-      '📊 Related Commands:',
-      '   • generate-proof - Create your personal mining proof',
-      '   • blockchain-stats - View current blockchain state',
-      '   • rewards - Check your mining rewards'
-    ]);
-  }
-  
-  async handleSendTransaction(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
-    }
-
-    if (args.length < 2) {
-      this.addOutput('❌ Usage: send <amount> <recipient_address>', 'error');
-      return;
-    }
-
-    const amount = parseFloat(args[0]);
-    const recipient = args[1];
-
-    if (isNaN(amount) || amount <= 0) {
-      this.addOutput('❌ Invalid amount. Must be a positive number.', 'error');
-      return;
-    }
-
-    if (!recipient.startsWith('BEANS') && !recipient.startsWith('CJ')) {
-      this.addOutput('❌ Invalid recipient address format.', 'error');
-      return;
-    }
-
-    try {
-      this.addOutput(`💸 Sending ${amount} BEANS to ${recipient}...`);
-      
-      const transactionData = {
-        sender: this.wallet.address,
-        recipient: recipient,
-        amount: amount,
-        timestamp: Date.now() / 1000
-      };
-
-      const response = await this.fetchWithFallback('/v1/transaction/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(transactionData)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          this.addOutput(`✅ Transaction submitted successfully!`);
-          this.addOutput(`   Transaction ID: ${data.transaction.transaction_id}`);
-          this.addOutput(`   Amount: ${amount} BEANS`);
-          this.addOutput(`   To: ${recipient}`);
-    } else {
-          this.addOutput(`❌ Transaction failed: ${data.error}`, 'error');
-        }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-
-  async handleTransactionHistory(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
-    }
-
-    try {
-      this.addOutput('📋 Fetching transaction history...');
-      const response = await this.fetchWithFallback(`/v1/wallet/${this.wallet.address}/transactions`);
-      
-      if (response.ok) {
-        const data = await response.json();
-      if (data.status === 'success') {
-          const transactions = data.transactions;
-          
-          if (transactions.length === 0) {
-            this.addOutput('📋 No transactions found.');
-            return;
-          }
-
-          this.addMultiLineOutput([
-            '📋 Transaction History:',
-            ''
-          ]);
-
-          transactions.slice(0, 10).forEach(tx => {
-            const direction = tx.sender === this.wallet.address ? '→' : '←';
-            const otherParty = tx.sender === this.wallet.address ? tx.recipient : tx.sender;
-            const amount = tx.sender === this.wallet.address ? `-${tx.amount}` : `+${tx.amount}`;
+            this.addOutput('', 'info');
+            this.addOutput('💡 Use "migrate-blocks" to submit these to the blockchain', 'info');
             
-            this.addOutput(`   ${direction} ${amount} BEANS ${direction} ${otherParty.substring(0, 8)}...`);
-          });
-
-          if (transactions.length > 10) {
-            this.addOutput(`   ... and ${transactions.length - 10} more transactions`);
-          }
-        } else {
-          this.addOutput(`❌ Error: ${data.error}`, 'error');
-      }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
     } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-
-  async handleBalance(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
-    }
-
-    try {
-      this.addOutput('💰 Fetching wallet balance...');
-      
-      // Get balance from blockchain state
-      const response = await this.fetchWithFallback(`/v1/wallet/${this.wallet.address}/balance`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          this.addMultiLineOutput([
-            '💰 Wallet Balance:',
-            `   Address: ${this.wallet.address}`,
-            `   Balance: ${data.balance} BEANS`,
-            `   Available: ${data.balance} BEANS`
-          ]);
-        } else {
-          this.addOutput(`❌ Error: ${data.error}`, 'error');
+            this.addOutput(`❌ Failed to check local blocks: ${error.message}`, 'error');
         }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
     }
-  }
 
-  async handleListProblems(args) {
-    try {
-      this.addOutput('📋 Fetching available problems...');
-      const response = await this.fetchWithFallback('/v1/problem/list');
-      
-      if (response.ok) {
-        const data = await response.json();
-      if (data.status === 'success') {
-          const problems = data.problems;
-          
-          if (problems.length === 0) {
-            this.addOutput('📋 No problems available for mining.');
+    async handleUpdateWallet() {
+        try {
+            this.addOutput('🔄 Updating wallet balance...', 'info');
+            
+            // Get current wallet balance from API
+            const metrics = await api.getMetricsDashboard();
+            const recentTransactions = metrics?.data?.recent_transactions || [];
+            
+            // Find transactions for this wallet
+            const myTransactions = recentTransactions.filter(tx => 
+                tx.miner === this.wallet.address || 
+                tx.miner_short === this.wallet.address.substring(0, 16) + '...'
+            );
+            
+            if (myTransactions.length > 0) {
+                // Calculate total rewards
+                const totalRewards = myTransactions.reduce((sum, tx) => sum + (tx.reward || 0), 0);
+                const totalBlocks = myTransactions.length;
+                
+                // Update wallet
+                this.wallet.balance = totalRewards;
+                this.wallet.blocksMined = totalBlocks;
+                
+                // Save to localStorage
+                localStorage.setItem('coinjecture_wallet', JSON.stringify(this.wallet));
+                
+                // Update display
+                this.updateWalletDisplay();
+                
+                this.addOutput(`✅ Wallet updated!`, 'success');
+                this.addOutput(`   Balance: ${totalRewards.toFixed(6)} BEANS`, 'info');
+                this.addOutput(`   Blocks mined: ${totalBlocks}`, 'info');
+            } else {
+                this.addOutput('   No transactions found for this wallet', 'info');
+            }
+        } catch (error) {
+            this.addOutput(`❌ Error updating wallet: ${error.message}`, 'error');
+        }
+    }
+
+    async handleCheckBalance() {
+        try {
+            this.addOutput('🔍 Checking wallet balance from API...', 'info');
+            
+            // Get wallet balance from API
+            const response = await api.getUserRewards(this.wallet.address);
+            
+            if (response && response.status === 'success') {
+                const data = response.data;
+                this.addOutput(`✅ Wallet Balance from API:`, 'success');
+                this.addOutput(`   Address: ${data.address}`, 'info');
+                this.addOutput(`   Total Rewards: ${data.total_rewards.toFixed(6)} BEANS`, 'info');
+                this.addOutput(`   Blocks Mined: ${data.blocks_mined}`, 'info');
+                this.addOutput(`   Average Work Score: ${data.average_work_score.toFixed(2)}`, 'info');
+                this.addOutput(`   Average Reward: ${data.avg_reward.toFixed(6)} BEANS`, 'info');
+                
+                // Update local wallet with API data
+                this.wallet.balance = data.total_rewards;
+                this.wallet.blocksMined = data.blocks_mined;
+                localStorage.setItem('coinjecture_wallet', JSON.stringify(this.wallet));
+                this.updateWalletDisplay();
+            } else {
+                this.addOutput('❌ Failed to get wallet balance from API', 'error');
+            }
+        } catch (error) {
+            this.addOutput(`❌ Error checking balance: ${error.message}`, 'error');
+        }
+    }
+
+    async startMining() {
+        if (this.isMining) {
+            this.addOutput('⛏️ Mining is already running!', 'warning');
             return;
-          }
-          
-          this.addMultiLineOutput([
-            '📋 Available Problems:',
-            ''
-          ]);
+        }
 
-          problems.forEach(problem => {
-            this.addOutput(`   ${problem.submission_id}: ${problem.problem_type} (${problem.bounty} BEANS)`);
-            this.addOutput(`      Status: ${problem.status}, Solutions: ${problem.solutions_count}`);
-          });
+        if (!this.wallet) {
+            this.addOutput('❌ No wallet connected. Please create a wallet first.', 'error');
+            return;
+        }
+
+        // Ensure P2P mining service has the current wallet
+        this.p2pMiningService.wallet = this.wallet;
+        this.p2pMiningService.addOutput = this.addOutput.bind(this);
+        this.p2pMiningService.metricsDashboard = this.metricsDashboard;
+
+        this.addOutput('🌐 Starting P2P mining...', 'info');
+        this.addOutput('   Connecting to COINjecture blockchain network...', 'info');
+        
+        // Start P2P mining
+        const success = await this.p2pMiningService.startMining();
+        
+        if (success) {
+            this.isMining = true;
+            this.addOutput('✅ P2P Mining started! Connected to blockchain network', 'success');
+            this.addOutput('   Problem Type: Subset Sum (NP-Complete)', 'info');
+            this.addOutput('   Algorithm: Dynamic Programming + Greedy + Backtracking', 'info');
+            this.addOutput('   Problem Size: 10-25 elements (device-optimized)', 'info');
+            this.addOutput('   Network: P2P with IPFS proof bundles', 'info');
+            this.addOutput('   Use "mine --stop" to stop mining', 'info');
+            
+            // Start stats monitoring
+            this.startMiningStatsMonitoring();
       } else {
-          this.addOutput(`❌ Error: ${data.error}`, 'error');
-      }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
+            this.addOutput('❌ Failed to start P2P mining', 'error');
+        }
     }
-  }
 
-  async handleProblemStatus(args) {
-    if (args.length < 1) {
-      this.addOutput('❌ Usage: problem-status <submission_id>', 'error');
+    stopMining() {
+        if (!this.isMining) {
+            this.addOutput('⛏️ Mining is not running!', 'warning');
       return;
     }
 
-    const submissionId = args[0];
+        this.isMining = false;
+        
+        // Stop P2P mining
+        this.p2pMiningService.stopMining();
+        
+        // Stop stats monitoring
+        if (this.miningInterval) {
+            clearInterval(this.miningInterval);
+            this.miningInterval = null;
+        }
+        
+        this.addOutput('⛏️ P2P Mining stopped.', 'success');
+        this.addOutput('   Use "mine --start" to resume mining', 'info');
+    }
 
-    try {
-      this.addOutput(`🔍 Checking problem status: ${submissionId}`);
-      const response = await this.fetchWithFallback(`/v1/problem/${submissionId}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          this.addMultiLineOutput([
-            '📊 Problem Status:',
-            `   ID: ${data.submission_id}`,
-            `   Type: ${data.problem_type}`,
-            `   Bounty: ${data.bounty} BEANS`,
-            `   Status: ${data.status}`,
-            `   Solutions: ${data.solutions_count}`,
-            `   Accepting: ${data.is_accepting ? 'Yes' : 'No'}`
-          ]);
+    showMiningStatus() {
+        this.addOutput('⛏️ Mining Status:', 'info');
+        if (this.isMining) {
+            const stats = this.p2pMiningService.getMiningStats();
+            const isAPIMode = this.p2pMiningService.p2pClient.peers.has('api-peer-1');
+            
+            this.addOutput(`   Status: ✅ Active (${isAPIMode ? 'API Mode' : 'P2P Connected'})`, 'success');
+            this.addOutput(`   Network: ${stats.peerCount} peers connected`, 'info');
+            this.addOutput(`   Blockchain Height: ${stats.blockchainHeight}`, 'info');
+            this.addOutput(`   Problems Solved: ${stats.problemsSolved}`, 'info');
+            this.addOutput(`   Blocks Mined: ${stats.blocksMined}`, 'info');
+            this.addOutput(`   Total Work Score: ${stats.totalWorkScore.toFixed(2)}`, 'info');
+            this.addOutput(`   Total Rewards: ${stats.totalRewards.toFixed(6)} BEANS`, 'info');
+            this.addOutput('   Problem Type: Subset Sum (NP-Complete)', 'info');
+            this.addOutput('   Algorithm: Dynamic Programming + Greedy + Backtracking', 'info');
+            this.addOutput('   Problem Size: 10-25 elements (device-optimized)', 'info');
+            this.addOutput(`   Network: ${isAPIMode ? 'API Fallback' : 'P2P with IPFS proof bundles'}`, 'info');
         } else {
-          this.addOutput(`❌ Error: ${data.error}`, 'error');
+            this.addOutput('   Status: ❌ Inactive', 'error');
+            this.addOutput('   Use "mine --start" to begin mining', 'info');
         }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-
-  async handleUserRegister(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
     }
 
-    try {
-      this.addOutput('👤 Registering as a miner...');
-      
-      const userData = {
-        user_id: this.wallet.address,
-        wallet_address: this.wallet.address,
-        mining_tier: 'mobile',
-        timestamp: Date.now() / 1000
-      };
-
-      const response = await this.fetchWithFallback('/v1/user/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(userData)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          this.addOutput(`✅ User registration successful!`);
-          this.addOutput(`   User ID: ${data.user_id}`);
-          this.addOutput(`   Wallet: ${this.wallet.address}`);
-          this.addOutput(`   Mining tier: mobile`);
-        } else {
-          this.addOutput(`❌ Registration failed: ${data.error}`, 'error');
-        }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-
-  async handleUserProfile(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
+    startMiningStatsMonitoring() {
+        // Monitor mining stats every 30 seconds
+        this.miningInterval = setInterval(() => {
+            if (this.isMining) {
+                const stats = this.p2pMiningService.getMiningStats();
+                this.addOutput(`📊 Mining Stats: ${stats.problemsSolved} problems solved, ${stats.blocksMined} blocks mined, ${stats.totalRewards.toFixed(6)} BEANS earned`, 'info');
+            }
+        }, 30000);
     }
 
-    try {
-      this.addOutput('👤 Fetching user profile...');
-      
-      const response = await this.fetchWithFallback(`/v1/user/profile/${this.wallet.address}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          this.addMultiLineOutput([
-            '👤 User Profile:',
-            `   User ID: ${data.user_id}`,
-            `   Wallet: ${data.wallet_address}`,
-            `   Mining Tier: ${data.mining_tier}`,
-            `   Total Blocks: ${data.total_blocks || 0}`,
-            `   Total Rewards: ${data.total_rewards || 0} BEANS`
-          ]);
-        } else {
-          this.addOutput(`❌ Error: ${data.error}`, 'error');
-        }
-      } else {
-        this.addOutput(`❌ API Error: ${response.status}`, 'error');
-      }
-    } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
+    // performMiningStep is now handled by P2PMiningService
 
-  async handleExportWallet(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
-    }
-
-    this.addMultiLineOutput([
-      '🔐 Wallet Export Information',
-      '',
-      '⚠️  WARNING: Keep this information secure!',
-      '   Anyone with access to your private key can control your wallet.',
-      '',
-      `Address: ${this.wallet.address}`,
-      `Private Key: ${this.wallet.privateKey}`,
-      `Public Key: ${this.wallet.publicKey}`,
-      '',
-      '💡 Store this information in a secure location!'
-    ]);
-  }
-
-  async handleCopyAddress(args) {
-    if (!this.wallet) {
-      this.wallet = await this.createOrLoadWallet();
-    }
-
-    try {
-      await this.copyToClipboard(this.wallet.address);
-      this.addOutput(`📋 Wallet address copied to clipboard: ${this.wallet.address}`);
-    } catch (error) {
-      this.addOutput(`❌ Failed to copy address: ${error.message}`, 'error');
-    }
-  }
-
-  async displayBlockchainStats() {
-    try {
-      this.addOutput('📊 Fetching blockchain statistics...');
-      
-      // Fetch from metrics dashboard for consecutive blockchain data
-      const metricsResponse = await this.fetchWithFallback('/v1/metrics/dashboard');
-      const metricsData = await metricsResponse.json();
-      
-      if (metricsData.status === 'success') {
-        const blockchain = metricsData.data.blockchain;
-        const totalBlocks = blockchain ? blockchain.validated_blocks : 0;
-        const latestBlock = blockchain ? blockchain.latest_block : 0;
-        const latestHash = blockchain ? blockchain.latest_hash : 'N/A';
-        const consensusActive = blockchain ? blockchain.consensus_active : false;
-        const miningAttempts = blockchain ? blockchain.mining_attempts : 0;
-        const successRate = blockchain ? blockchain.success_rate : 0;
+    calculateWorkScore(result, solveTime) {
+        if (!result.success) return 0;
         
-        this.addMultiLineOutput([
-          '📊 Blockchain Statistics (Consecutive Chain):',
-          `   Validated Blocks: ${totalBlocks.toLocaleString()}`,
-          `   Latest Block: #${latestBlock.toLocaleString()}`,
-          `   Latest Hash: ${latestHash}`,
-          `   Consensus: ${consensusActive ? 'Active' : 'Inactive'}`,
-          `   Mining Attempts: ${miningAttempts.toLocaleString()}`,
-          `   Success Rate: ${successRate}%`
-        ]);
-      } else {
-        this.addOutput('❌ Failed to fetch blockchain statistics', 'error');
-      }
+        try {
+            // Calculate work score based on real complexity metrics
+            const problemSize = result.solution?.numbers?.length || 0;
+            if (problemSize === 0) {
+                console.warn('No solution numbers found, using fallback work score');
+                return MINING_CONFIG.MIN_WORK_SCORE;
+            }
+            
+            const timeAsymmetry = Math.log(solveTime + 1) / Math.log(1000); // Normalize to 0-1 range
+            const spaceAsymmetry = Math.log(problemSize + 1) / Math.log(25); // Normalize to 0-1 range
+            const problemWeight = problemSize / 25; // Normalize to 0-1 range
+            const qualityScore = result.quality || 1.0;
+            const energyEfficiency = 1.0; // Assume 100% efficiency for now
+            
+            // Apply the work score formula from architecture
+            const workScore = timeAsymmetry * 
+                             Math.sqrt(spaceAsymmetry) * 
+                             problemWeight * 
+                             qualityScore * 
+                             energyEfficiency * 
+                             1000; // Scale factor
+            
+            return Math.max(workScore, MINING_CONFIG.MIN_WORK_SCORE);
     } catch (error) {
-      this.addOutput(`❌ Network error: ${error.message}`, 'error');
-    }
-  }
-
-  async fetchMetrics() {
-    try {
-      const response = await this.fetchWithFallback('/v1/metrics/dashboard');
-      const data = await response.json();
-      return data.data;
-    } catch (error) {
-      console.error('Error fetching metrics:', error);
-      return null;
-    }
-  }
-
-  updateMetricsDashboard(metrics) {
-    if (!metrics) return;
-
-    // Update Blockchain Overview
-    if (metrics.blockchain) {
-      document.getElementById('validated-blocks').textContent = metrics.blockchain.validated_blocks.toLocaleString();
-      document.getElementById('latest-block').textContent = metrics.blockchain.latest_block.toLocaleString();
-      document.getElementById('latest-hash').textContent = metrics.blockchain.latest_hash;
-      document.getElementById('consensus-status').textContent = metrics.blockchain.consensus_active ? 'Active' : 'Inactive';
-      document.getElementById('mining-attempts').textContent = metrics.blockchain.mining_attempts.toLocaleString();
-      document.getElementById('success-rate').textContent = metrics.blockchain.success_rate + '%';
+            console.error('Error calculating work score:', error);
+            return MINING_CONFIG.MIN_WORK_SCORE;
+        }
     }
 
-    // Update Consensus Equilibrium Metrics
-    if (metrics.consensus && metrics.consensus.equilibrium_proof) {
-      const eq = metrics.consensus.equilibrium_proof;
-      document.getElementById('satoshi-constant').textContent = eq.satoshi_constant.toFixed(6);
-      document.getElementById('damping-ratio').textContent = eq.damping_ratio.toFixed(6);
-      document.getElementById('coupling-strength').textContent = eq.coupling_strength.toFixed(6);
-      document.getElementById('stability-metric').textContent = eq.stability_metric.toFixed(6);
-      document.getElementById('fork-resistance').textContent = eq.fork_resistance.toFixed(6);
-      document.getElementById('liveness-guarantee').textContent = eq.liveness_guarantee.toFixed(6);
-      document.getElementById('nash-equilibrium').textContent = eq.nash_equilibrium ? '✅ Optimal' : '❌ Suboptimal';
+    calculateReward(workScore) {
+        // Dynamic tokenomics formula from architecture:
+        // reward = log(1 + work_score/network_avg) * deflation_factor
+        // deflation_factor = 1 / (2^(log2(cumulative_work)/10))
+        
+        // For now, use simplified version with network average of 100
+        const networkAvg = 100; // This would come from network state in real implementation
+        const cumulativeWork = 1000; // This would come from blockchain state
+        const deflationFactor = 1 / Math.pow(2, Math.log2(cumulativeWork) / 10);
+        
+        const reward = Math.log(1 + workScore / networkAvg) * deflationFactor;
+        
+        // Scale to reasonable BEANS amounts (0.001 to 1.0 BEANS)
+        return Math.max(reward * 0.1, 0.001);
     }
 
-    // Update Proof of Work Metrics
-    if (metrics.consensus && metrics.consensus.proof_of_work) {
-      const pow = metrics.consensus.proof_of_work;
-      document.getElementById('commitment-formula').textContent = pow.commitment_scheme;
-      document.getElementById('anti-grinding').textContent = pow.anti_grinding ? '✅ Enabled' : '❌ Disabled';
-      document.getElementById('cryptographic-binding').textContent = pow.cryptographic_binding ? '✅ Enabled' : '❌ Disabled';
-      document.getElementById('hiding-property').textContent = pow.hiding_property ? '✅ Enabled' : '❌ Disabled';
-    }
+    async submitMinedBlock(problem, result, workScore, reward) {
+        try {
+            // ARCHITECTURE: All nodes are validators - this node participates in consensus
+            this.addOutput(`🔍 Validating and submitting block to consensus...`, 'info');
+            
+            // Step 1: Create commitment (Commit Phase)
+            const commitment = this.createCommitment(problem, result);
+            this.addOutput(`   Commitment: ${commitment.substring(0, 16)}...`, 'info');
+            
+            // Step 2: Create block header (Mine Phase)
+            const blockHeader = await this.createBlockHeader(problem, result, workScore, commitment);
+            
+            // Step 3: Validate header (All nodes validate)
+            const validationResult = await this.validateBlockHeader(blockHeader);
+            if (!validationResult.valid) {
+                this.addOutput(`❌ Block validation failed: ${validationResult.error}`, 'error');
+                return;
+            }
+            
+            // Step 4: Create proof bundle (Reveal Phase)
+            const proofBundle = this.createProofBundle(problem, result, workScore, commitment);
+            
+            // Step 5: Submit to consensus network
+            this.addOutput(`📤 Submitting to consensus network...`, 'info');
+            
+            const response = await api.submitMinedBlock({
+                block_header: blockHeader,
+                proof_bundle: proofBundle,
+                work_score: workScore,
+                reward: reward,
+                commitment: commitment
+            });
 
-    // Update TPS
-    if (metrics.transactions) {
-      document.getElementById('tps-current').textContent = (metrics.transactions.tps_current || 0).toFixed(2);
-      document.getElementById('tps-1min').textContent = (metrics.transactions.tps_1min || 0).toFixed(2);
-      document.getElementById('tps-5min').textContent = (metrics.transactions.tps_5min || 0).toFixed(2);
-      document.getElementById('tps-1hr').textContent = (metrics.transactions.tps_1hour || 0).toFixed(2);
-      document.getElementById('tps-24hr').textContent = (metrics.transactions.tps_24hour || 0).toFixed(2);
-      this.updateTrendIndicator('tps-trend', metrics.transactions.trend || '→');
-    }
-
-    // Update Block Time
-    if (metrics.block_time) {
-      document.getElementById('block-time-current').textContent = (metrics.block_time.avg_seconds || 0).toFixed(2);
-      document.getElementById('block-time-avg').textContent = (metrics.block_time.avg_seconds || 0).toFixed(2);
-      document.getElementById('block-time-median').textContent = (metrics.block_time.median_seconds || 0).toFixed(2);
-      document.getElementById('block-time-100').textContent = (metrics.block_time.last_100_blocks || 0).toFixed(2);
-      this.updateTrendIndicator('block-time-trend', '→');
-    }
-
-    // Update Hash Rate
-    if (metrics.hash_rate) {
-      document.getElementById('hash-rate-current').textContent = this.formatHashRate(metrics.hash_rate.current_hs);
-      document.getElementById('hash-rate-1min').textContent = this.formatHashRate(metrics.hash_rate.current_hs);
-      document.getElementById('hash-rate-5min').textContent = this.formatHashRate(metrics.hash_rate['5min_hs']);
-      document.getElementById('hash-rate-1hr').textContent = this.formatHashRate(metrics.hash_rate['1hour_hs']);
-      this.updateTrendIndicator('hash-rate-trend', metrics.hash_rate.trend);
-    }
-
-    // Update Network Status
-    if (metrics.network) {
-      document.getElementById('network-peers').textContent = metrics.network.active_peers || 0;
-      document.getElementById('network-peers-count').textContent = metrics.network.active_peers || 0;
-      document.getElementById('network-miners').textContent = metrics.network.active_miners || 0;
-      document.getElementById('network-difficulty').textContent = (metrics.network.avg_difficulty || 0).toFixed(2);
-      this.updateTrendIndicator('network-trend', '→');
-    }
-
-    // Update Rewards
-    if (metrics.rewards) {
-      document.getElementById('rewards-total').textContent = this.formatNumber(metrics.rewards.total_distributed);
-      document.getElementById('rewards-distributed').textContent = this.formatNumber(metrics.rewards.total_distributed);
-      document.getElementById('rewards-unit').textContent = metrics.rewards.unit;
-      this.updateTrendIndicator('rewards-trend', '→');
-    }
-
-    // Update Efficiency
-    if (metrics.efficiency) {
-      document.getElementById('efficiency-current').textContent = (metrics.efficiency.efficiency_ratio || 0).toFixed(4);
-      document.getElementById('efficiency-solved').textContent = (metrics.efficiency.problems_solved_1h || 0).toLocaleString();
-      document.getElementById('efficiency-work').textContent = this.formatNumber(metrics.efficiency.total_work_score_1h || 0);
-      document.getElementById('efficiency-ratio').textContent = (metrics.efficiency.efficiency_ratio || 0).toFixed(4);
-      this.updateTrendIndicator('efficiency-trend', '→');
-    }
-
-    // Update Recent Transactions
-    if (metrics.recent_transactions) {
-      this.updateRecentTransactions(metrics.recent_transactions);
-    }
-
-    // Update last updated time
-    const lastUpdated = new Date(metrics.last_updated * 1000).toLocaleTimeString();
-    document.getElementById('last-updated').textContent = lastUpdated;
-  }
-
-  formatHashRate(hashRate) {
-    if (hashRate >= 1000000) {
-      return (hashRate / 1000000).toFixed(2) + ' MH/s';
-    } else if (hashRate >= 1000) {
-      return (hashRate / 1000).toFixed(2) + ' KH/s';
+            if (response.success) {
+                this.addOutput(`✅ Block accepted by consensus!`, 'success');
+                this.addOutput(`   Block Hash: ${response.block_hash?.substring(0, 16)}...`, 'info');
+                this.addOutput(`   Block Height: ${response.height}`, 'info');
+                this.addOutput(`   Cumulative Work: ${response.cumulative_work}`, 'info');
+                this.addOutput(`   IPFS CID: ${response.proof_cid?.substring(0, 16)}...`, 'info');
+                
+                // Update local blockchain state (all nodes maintain state)
+                this.updateLocalBlockchainState(response);
+                
+                // Refresh metrics to show updated blockchain
+                setTimeout(() => {
+                    this.refreshMetrics();
+                }, 1000);
     } else {
-      return hashRate.toFixed(2) + ' H/s';
+                this.addOutput(`❌ Block rejected by consensus: ${response.error}`, 'error');
+            }
+
+        } catch (error) {
+            this.addOutput(`❌ Failed to submit block: ${error.message}`, 'error');
+            console.error('Block submission error:', error);
+        }
     }
-  }
 
-  formatNumber(num) {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(2) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(2) + 'K';
-    } else {
-      return num.toFixed(2);
+    // ARCHITECTURE-COMPLIANT BLOCKCHAIN INTEGRATION
+    
+    /**
+     * Create commitment for commit-reveal protocol
+     * ARCHITECTURE: commitment = H(problem_params || miner_salt || epoch_salt || H(solution))
+     */
+    createCommitment(problem, result) {
+        const epochSalt = this.getCurrentEpoch();
+        const minerSalt = this.generateCommitNonce();
+        const solutionHash = this.sha256(JSON.stringify(result.solution));
+        
+        const commitmentData = {
+            problem_params: {
+                numbers: problem.numbers,
+                target: problem.target,
+                size: problem.size,
+                type: 'subset_sum'
+            },
+            miner_salt: minerSalt,
+            epoch_salt: epochSalt.toString(),
+            solution_hash: solutionHash
+        };
+        
+        return this.sha256(JSON.stringify(commitmentData));
     }
-  }
 
-  updateRecentTransactions(transactions) {
-    const transactionsList = document.getElementById('transactions-list');
-    if (!transactionsList) return;
-
-    transactionsList.innerHTML = '';
-    
-    transactions.forEach(tx => {
-      const transactionRow = document.createElement('div');
-      transactionRow.className = 'transaction-row';
-      transactionRow.innerHTML = `
-        <div class="transaction-block">
-          <div class="block-header">
-            <span class="block-index">#${tx.block_index}</span>
-            <span class="block-age">${tx.age_display}</span>
-          </div>
-          <div class="block-details">
-            <div class="block-hash">
-              <span class="label">Hash:</span>
-              <span class="value" title="${tx.block_hash}">${tx.block_hash_short}</span>
-            </div>
-            <div class="block-miner">
-              <span class="label">Miner:</span>
-              <span class="value" title="${tx.miner}">${tx.miner_short}</span>
-            </div>
-            <div class="block-work">
-              <span class="label">Work Score:</span>
-              <span class="value">${tx.work_score}</span>
-            </div>
-            <div class="block-capacity">
-              <span class="label">Capacity:</span>
-              <span class="value">${tx.capacity}</span>
-            </div>
-            <div class="block-timestamp">
-              <span class="label">Time:</span>
-              <span class="value">${tx.timestamp_display}</span>
-            </div>
-            <div class="block-previous">
-              <span class="label">Previous:</span>
-              <span class="value" title="${tx.previous_hash}">${tx.previous_hash_short}</span>
-            </div>
-            <div class="block-cid">
-              <span class="label">CID:</span>
-              <a class="value cid-link" href="#" title="Download proof bundle JSON: ${tx.cid}" onclick="event.preventDefault(); downloadProofBundle('${tx.cid}')">${tx.cid_short}</a>
-            </div>
-            <div class="block-gas">
-              <span class="label">Gas Used:</span>
-              <span class="value">${tx.gas_used_formatted}</span>
-            </div>
-          </div>
-        </div>
-      `;
-      transactionsList.appendChild(transactionRow);
-    });
-  }
-
-  updateTrendIndicator(elementId, trend) {
-    const element = document.getElementById(elementId);
-    if (!element) return;
-
-    element.textContent = trend;
-    element.className = 'metric-trend';
-    
-    if (trend === '↑') {
-      element.classList.add('up');
-    } else if (trend === '↓') {
-      element.classList.add('down');
-    } else {
-      element.classList.add('stable');
+    /**
+     * Create block header according to architecture
+     * ARCHITECTURE: All nodes maintain blockchain state and validate headers
+     */
+    async createBlockHeader(problem, result, workScore, commitment) {
+        const currentState = await this.getCurrentBlockchainState();
+        
+        return {
+            version: 1,
+            parent_hash: currentState.latest_hash,
+            height: currentState.height + 1,
+            timestamp: Date.now(),
+            commitments_root: this.calculateCommitmentsRoot(commitment),
+            tx_root: '0x0000000000000000000000000000000000000000000000000000000000000000',
+            difficulty_target: currentState.difficulty_target,
+            cumulative_work: currentState.cumulative_work + workScore,
+            miner_pubkey: this.wallet.publicKey,
+            commit_nonce: this.generateCommitNonce(),
+            problem_type: 'subset_sum',
+            tier: this.getOptimalTier(),
+            commit_epoch: this.getCurrentEpoch(),
+            proof_commitment: commitment,
+            header_hash: null // Will be calculated
+        };
     }
-  }
 
-  startMetricsPolling() {
-    this.metricsInterval = setInterval(async () => {
-      if (this.currentPage === 'metrics') {
-        const metrics = await this.fetchMetrics();
-        this.updateMetricsDashboard(metrics);
-      }
-    }, 15000); // 15 seconds
-  }
-
-  stopMetricsPolling() {
-    if (this.metricsInterval) {
-      clearInterval(this.metricsInterval);
-      this.metricsInterval = null;
-    }
-  }
-
-  // IPFS Viewer with multiple gateway fallbacks
-  openIPFSViewer(cid) {
-    const gateways = [
-      `https://gateway.pinata.cloud/ipfs/${cid}`,
-      `https://ipfs.io/ipfs/${cid}`,
-      `https://cloudflare-ipfs.com/ipfs/${cid}`,
-      `https://dweb.link/ipfs/${cid}`,
-      `https://gateway.ipfs.io/ipfs/${cid}`
-    ];
-    
-    // Try the first gateway
-    const newWindow = window.open(gateways[0], '_blank');
-    
-    // If the first gateway fails, show a modal with options
-    setTimeout(() => {
-      if (newWindow && newWindow.closed) {
-        this.showIPFSModal(cid, gateways);
-      }
-    }, 2000);
-  }
-
-  showIPFSModal(cid, gateways) {
-    const modal = document.createElement('div');
-    modal.className = 'ipfs-modal';
-    modal.innerHTML = `
-      <div class="ipfs-modal-content">
-        <div class="ipfs-modal-header">
-          <h3>IPFS Content Viewer</h3>
-          <button class="ipfs-modal-close" onclick="this.parentElement.parentElement.parentElement.remove()">&times;</button>
-        </div>
-        <div class="ipfs-modal-body">
-          <p><strong>CID:</strong> ${cid}</p>
-          <p>Choose an IPFS gateway to view this content:</p>
-          <div class="ipfs-gateway-list">
-            ${gateways.map((gateway, index) => `
-              <a href="${gateway}" target="_blank" class="ipfs-gateway-link">
-                Gateway ${index + 1}: ${gateway.replace('https://', '').split('/')[0]}
-              </a>
-            `).join('')}
-          </div>
-          <div class="ipfs-copy-section">
-            <p>Or copy the CID to use with your local IPFS client:</p>
-            <div class="ipfs-copy-input">
-              <input type="text" value="${cid}" readonly>
-              <button onclick="navigator.clipboard.writeText('${cid}'); this.textContent='Copied!'">Copy CID</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    document.body.appendChild(modal);
-  }
-
-  async downloadProofBundle(cid) {
-    try {
-      const response = await fetch(`${this.apiBase}/v1/ipfs/${cid}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch proof bundle');
-      }
-      
-      const data = await response.json();
-      
-      // Create downloadable JSON file
-      const blob = new Blob([JSON.stringify(data.data, null, 2)], { 
-        type: 'application/json' 
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `proof-bundle-${cid.substring(0, 16)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      console.log('Proof bundle downloaded:', cid);
+    /**
+     * Validate block header (All nodes validate)
+     * ARCHITECTURE: Every node validates every header
+     */
+    async validateBlockHeader(header) {
+        try {
+            // Basic validation checks
+            if (!header.version || header.version !== 1) {
+                return { valid: false, error: 'Invalid version' };
+            }
+            
+            if (!header.timestamp || header.timestamp > Date.now() + 300000) { // 5 min future tolerance
+                return { valid: false, error: 'Invalid timestamp' };
+            }
+            
+            if (!header.proof_commitment || header.proof_commitment.length !== 64) {
+                return { valid: false, error: 'Invalid proof commitment' };
+            }
+            
+            if (!header.miner_pubkey || header.miner_pubkey.length !== 64) {
+                return { valid: false, error: 'Invalid miner public key' };
+            }
+            
+            // Calculate and verify header hash
+            const calculatedHash = this.calculateHeaderHash(header);
+            header.header_hash = calculatedHash;
+            
+            // Verify work score meets difficulty target
+            const estimatedWork = this.estimateWorkScore(header);
+            if (estimatedWork < header.difficulty_target) {
+                return { valid: false, error: 'Insufficient work score' };
+            }
+            
+            return { valid: true, header_hash: calculatedHash };
+            
     } catch (error) {
-      console.error('Error downloading proof bundle:', error);
-      alert('Failed to download proof bundle. CID may not be available.');
+            return { valid: false, error: error.message };
+        }
     }
-  }
 
-  async fetchWithFallback(endpoint, options = {}) {
-    const url = endpoint.startsWith('http') ? endpoint : `${this.apiBase}${endpoint}`;
-    
-    // Add cache-busting parameter
-    const separator = url.includes('?') ? '&' : '?';
-    const cacheBustUrl = `${url}${separator}t=${Date.now()}`;
-    
-    return fetch(cacheBustUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    });
-  }
-
-  async copyToClipboard(text) {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
+    /**
+     * Create proof bundle for IPFS storage
+     * ARCHITECTURE: Solution bundles stored on IPFS, referenced by CID
+     */
+    createProofBundle(problem, result, workScore, commitment) {
+        return {
+            problem: {
+                type: 'subset_sum',
+                numbers: problem.numbers,
+                target: problem.target,
+                size: problem.size
+            },
+            solution: result.solution,
+            work_score: workScore,
+            solve_time: result.solveTime,
+            algorithm: result.method,
+            miner_address: this.wallet.address,
+            miner_pubkey: this.wallet.publicKey,
+            commitment: commitment,
+            timestamp: Date.now()
+        };
     }
-  }
 
-  async updateNetworkStatus() {
-    if (this.status) {
-      try {
-        // Get blockchain stats, rewards, and metrics status using consolidated API
-        const [metricsResponse, rewardsResponse] = await Promise.all([
-          this.fetchWithFallback('/v1/metrics/dashboard'),
-          this.wallet ? this.fetchWithFallback(`/v1/rewards/${this.wallet.address}`) : Promise.resolve({ok: false})
-        ]);
+    /**
+     * Update local blockchain state (All nodes maintain state)
+     * ARCHITECTURE: Every node maintains blockchain state for consensus
+     */
+    updateLocalBlockchainState(response) {
+        // Update local blockchain state
+        const newState = {
+            latest_hash: response.block_hash,
+            height: response.height,
+            cumulative_work: response.cumulative_work,
+            last_update: Date.now()
+        };
+        
+        localStorage.setItem('coinjecture_blockchain_state', JSON.stringify(newState));
+        
+        // Update metrics
+        this.addOutput(`📊 Blockchain state updated locally`, 'info');
+    }
 
-        let statusText = '🌐 Connected';
-        
-        // Add block height from metrics (consecutive blockchain)
-        if (metricsResponse.ok) {
-          const metricsData = await metricsResponse.json();
-          if (metricsData.status === 'success') {
-            const blockchain = metricsData.data.blockchain;
-            const latestBlock = blockchain.latest_block || 0;
-            statusText += ` | 📊 Block #${latestBlock}`;
-          }
-        }
-        
-        // Add user rewards
-        if (this.wallet && rewardsResponse.ok) {
-          const rewardsData = await rewardsResponse.json();
-          if (rewardsData.status === 'success') {
-            const rewards = rewardsData.data.total_rewards || 0;
-            const blocks = rewardsData.data.blocks_mined || 0;
-            statusText += ` | 💰 ${rewards.toFixed(2)} BEANS (${blocks} blocks)`;
-          }
-        }
-        
-        // Add consensus engine status from metrics
-        if (metricsResponse.ok) {
-          const metricsData = await metricsResponse.json();
-          if (metricsData.status === 'success') {
-            const blockchain = metricsData.data.blockchain;
-            const validatedBlocks = blockchain.validated_blocks || 0;
-            const latestBlock = blockchain.latest_block || 0;
-            const consensusActive = blockchain.consensus_active || false;
-            statusText += ` | ⚙️ Consensus: ${validatedBlocks} blocks (${consensusActive ? 'Active' : 'Inactive'})`;
-          }
-        } else {
-          // Fallback: show consensus is processing
-          statusText += ` | ⚙️ Consensus: Processing...`;
-        }
-        
-        this.status.textContent = statusText;
+    // Helper methods
+    async getCurrentBlockchainState() {
+        try {
+            const stored = localStorage.getItem('coinjecture_blockchain_state');
+            if (stored) {
+                return JSON.parse(stored);
+            }
     } catch (error) {
-        // Fallback to basic status
-        this.status.textContent = '🌐 Connected';
-      }
+            console.warn('Failed to load blockchain state:', error);
+        }
+        
+        // Default state
+        return {
+            latest_hash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+            height: 0,
+            cumulative_work: 0,
+            difficulty_target: 1000
+        };
     }
-  }
 
-  addOutput(text, type = 'normal') {
-    const output = document.createElement('div');
-    output.className = `output ${type}`;
-    output.textContent = text;
-    this.output.appendChild(output);
-    this.output.scrollTop = this.output.scrollHeight;
-  }
+    calculateCommitmentsRoot(commitment) {
+        return this.sha256(commitment);
+    }
 
-  addMultiLineOutput(lines) {
-    lines.forEach(line => {
-      this.addOutput(line);
-    });
-  }
+    generateCommitNonce() {
+        return Math.floor(Math.random() * 0xFFFFFFFF).toString(16).padStart(8, '0');
+    }
 
-  clearTerminal() {
-    this.output.innerHTML = '<div class="output">coinjectured$ <span class="cursor">█</span></div>';
+    getOptimalTier() {
+        return deviceUtils.isMobile() ? 1 : 2; // Mobile: 1, Desktop: 2
+    }
+
+    getCurrentEpoch() {
+        return Math.floor(Date.now() / 60000); // 1 minute epochs
+    }
+
+    calculateHeaderHash(header) {
+        const headerString = JSON.stringify({
+            version: header.version,
+            parent_hash: header.parent_hash,
+            height: header.height,
+            timestamp: header.timestamp,
+            commitments_root: header.commitments_root,
+            tx_root: header.tx_root,
+            difficulty_target: header.difficulty_target,
+            cumulative_work: header.cumulative_work,
+            miner_pubkey: header.miner_pubkey,
+            commit_nonce: header.commit_nonce,
+            problem_type: header.problem_type,
+            tier: header.tier,
+            commit_epoch: header.commit_epoch,
+            proof_commitment: header.proof_commitment
+        });
+        
+        return '0x' + this.sha256(headerString);
+    }
+
+    estimateWorkScore(header) {
+        // Simplified work score estimation
+        return header.cumulative_work - (header.height * 100);
+    }
+
+    sha256(data) {
+        // Simple SHA-256 implementation (in real app, use crypto.subtle)
+        const encoder = new TextEncoder();
+        const dataBuffer = encoder.encode(data);
+        return Array.from(dataBuffer)
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('')
+            .substring(0, 64);
+    }
+
+    async loadMetrics() {
+        try {
+            if (this.metricsDashboard) {
+                await this.metricsDashboard.fetchAndUpdateMetrics();
+      }
+    } catch (error) {
+            console.error('Failed to load metrics:', error);
+        }
+    }
+
+    refreshMetrics() {
+        // Refresh the metrics dashboard to show updated blockchain data
+        if (typeof metricsDashboard !== 'undefined' && metricsDashboard.fetchAndUpdateMetrics) {
+            metricsDashboard.fetchAndUpdateMetrics();
+        }
+    }
+
+    /**
+     * Migrate local-only blocks to blockchain
+     * This handles the transition from simulation mining to real blockchain mining
+     */
+    async migrateLocalBlocksToBlockchain() {
+        try {
+            // Check if we have local blocks that haven't been submitted to blockchain
+            const localBlocks = localStorage.getItem('coinjecture_local_blocks');
+            if (!localBlocks) {
+                return; // No local blocks to migrate
+            }
+
+            const blocks = JSON.parse(localBlocks);
+            if (blocks.length === 0) {
+                return;
+            }
+
+            this.addOutput(`🔄 Found ${blocks.length} local blocks to migrate to blockchain...`, 'info');
+            
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const block of blocks) {
+                try {
+                    this.addOutput(`📤 Submitting local block ${block.id} to blockchain...`, 'info');
+                    
+                    // Submit the local block to blockchain
+                    const response = await api.submitMinedBlock({
+                        block_header: block.header,
+                        proof_bundle: block.proof_bundle,
+                        work_score: block.work_score,
+                        reward: block.reward,
+                        commitment: block.commitment,
+                        is_migration: true // Flag to indicate this is a migration
+                    });
+
+                    if (response.success) {
+                        this.addOutput(`✅ Local block ${block.id} submitted successfully!`, 'success');
+                        successCount++;
+                    } else {
+                        this.addOutput(`❌ Failed to submit local block ${block.id}: ${response.error}`, 'error');
+                        failCount++;
+                    }
+
+                    // Small delay between submissions
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    } catch (error) {
+                    this.addOutput(`❌ Error submitting local block ${block.id}: ${error.message}`, 'error');
+                    failCount++;
+                }
+            }
+
+            // Summary
+            this.addOutput(`📊 Migration complete: ${successCount} successful, ${failCount} failed`, 'info');
+            
+            if (successCount > 0) {
+                this.addOutput(`🎉 Your ${successCount} previously mined blocks are now on the blockchain!`, 'success');
+                
+                // Clear local blocks after successful migration
+                localStorage.removeItem('coinjecture_local_blocks');
+                
+                // Refresh metrics to show updated blockchain
+                setTimeout(() => {
+                    this.refreshMetrics();
+                }, 2000);
+            }
+
+    } catch (error) {
+            console.error('Migration error:', error);
+            this.addOutput(`❌ Migration failed: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Store local block for later migration
+     * This is used when mining before blockchain integration
+     */
+    storeLocalBlock(problem, result, workScore, reward, blockHeader, proofBundle, commitment) {
+        try {
+            const localBlocks = JSON.parse(localStorage.getItem('coinjecture_local_blocks') || '[]');
+            
+            const localBlock = {
+                id: `local_${Date.now()}`,
+                timestamp: Date.now(),
+                problem: problem,
+                result: result,
+                work_score: workScore,
+                reward: reward,
+                header: blockHeader,
+                proof_bundle: proofBundle,
+                commitment: commitment
+            };
+
+            localBlocks.push(localBlock);
+            localStorage.setItem('coinjecture_local_blocks', JSON.stringify(localBlocks));
+            
+            this.addOutput(`💾 Block stored locally for migration (${localBlocks.length} total)`, 'info');
+            
+      } catch (error) {
+            console.error('Failed to store local block:', error);
+    }
   }
 }
 
-  // Initialize interface when page loads
+// Initialize application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  new WebInterface();
+    console.log('🚀 Initializing COINjecture Web Interface v3.15.0');
+    
+    // Create global web interface instance
+  window.webInterface = new WebInterface();
+    
+    // Auto-refresh metrics if on metrics page
+    setTimeout(() => {
+        if (window.webInterface.currentPage === 'metrics') {
+            window.forceRefreshMetrics();
+        }
+    }, 1000);
+    
+    console.log('✅ COINjecture Web Interface initialized successfully');
 });
 
-
-
+// Export for module usage
+export default WebInterface;

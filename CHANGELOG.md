@@ -1,5 +1,58 @@
 # Changelog
 
+## [3.15.0] - 2025-10-27 - 🚀 DYNAMIC GAS CALCULATION RELEASE
+
+### 🎉 **MAJOR RELEASE: Dynamic Gas Calculation System**
+
+#### **⛽ Revolutionary Dynamic Gas Calculation**
+- **IPFS-based Gas Costs**: Gas calculation now scales with computational complexity
+- **Gas Range**: 38K-600K+ gas based on problem difficulty and IPFS storage requirements
+- **Real-time Calculation**: Gas costs calculated during mining operations
+- **Enhanced CLI**: All commands now support dynamic gas calculation
+
+#### **🔧 Core System Updates**
+- **Version Update**: All components updated to v3.15.0
+- **CLI Enhancement**: Improved error handling and gas integration
+- **Package Building**: Updated build scripts for v3.15.0
+- **Web Interface**: Updated download links and version references
+
+#### **📦 Complete Package Distribution**
+- **macOS**: `COINjecture-macOS-v3.15.0-Python.zip` (0.7 MB)
+- **Windows**: `COINjecture-Windows-v3.15.0-Python.zip` (0.7 MB)
+- **Linux**: `COINjecture-Linux-v3.15.0-Python.zip` (0.7 MB)
+- **macOS DMG**: `COINjecture-3.15.0-macOS.dmg` (35.9 MB)
+- **macOS App**: `COINjecture-3.15.0-macOS.app` (35.9 MB)
+
+#### **🌐 Web Interface Updates**
+- **Download Page**: Updated with v3.15.0 packages and features
+- **API Documentation**: Version references updated to v3.15.0
+- **Feature Descriptions**: Enhanced descriptions of dynamic gas system
+- **GitHub Integration**: Direct links to [GitHub repository](https://github.com/beanapologist/COINjecture)
+
+#### **🚀 Installation Improvements**
+- **Cross-platform Scripts**: Platform-specific install and launcher scripts
+- **Automated Setup**: One-click installation for all platforms
+- **Interactive Menus**: Enhanced user experience for beginners
+- **Direct CLI Access**: Full command-line functionality for advanced users
+
+#### **📊 Technical Specifications**
+- **Python Version**: 3.8+ required
+- **Dependencies**: All included in packages
+- **Network**: Live TestNet with dynamic gas calculation
+- **API Endpoints**: Enhanced with gas calculation support
+
+#### **🔗 GitHub Integration**
+- **Repository**: [https://github.com/beanapologist/COINjecture](https://github.com/beanapologist/COINjecture)
+- **Releases**: v3.15.0 packages available for download
+- **Documentation**: Complete setup and usage guides
+- **Community**: Issues and discussions supported
+
+### 🎯 **Ready for Production Use**
+
+**The COINjecture v3.15.0 release introduces the revolutionary dynamic gas calculation system, making it the first blockchain to use IPFS-based gas costs that scale with computational complexity!**
+
+---
+
 ## [3.15.0] - 2025-01-26 - 🎉 COMPLETE IPFS INTEGRATION SUCCESS
 
 ### 🚀 **MAJOR BREAKTHROUGH: 100% IPFS Integration Achieved**

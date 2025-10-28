@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="updated" content="1761462000-v3.15.0">
+    <meta name="version" content="3.15.0">
+    <meta name="cache-buster" content="1761462000-v3.15.0">
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>COINjecture Explorer - $BEANS</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-text">COINjecture</span>
+                <span class="brand-subtitle">Blockchain Explorer</span>
+                <span class="brand-ticker">$BEANS</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Terminal</a>
+                <a href="/mining" class="nav-link">Mining</a>
+                <a href="/metrics" class="nav-link">Metrics</a>
+                <a href="/explorer" class="nav-link active">Explorer</a>
+                <a href="/download" class="nav-link">Download</a>
+                <a href="/proof" class="nav-link">Proof</a>
+                <a href="/api-docs" class="nav-link">API</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Blockchain Explorer -->
+        <div class="explorer-container">
+            <div class="explorer-header">
+                <h1>🔍 COINjecture Blockchain Explorer</h1>
+                <p class="explorer-subtitle">Explore blocks, transactions, and addresses on the COINjecture network</p>
+            </div>
+
+            <!-- Statistics Overview -->
+            <div class="explorer-stats">
+                <div class="stat-card">
+                    <div class="stat-icon">📦</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Blocks</div>
+                        <div class="stat-value" id="total-blocks">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">💸</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Transactions</div>
+                        <div class="stat-value" id="total-transactions">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Addresses</div>
+                        <div class="stat-value" id="total-addresses">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Network Hash Rate</div>
+                        <div class="stat-value" id="network-hash-rate">0 H/s</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Avg Block Time</div>
+                        <div class="stat-value" id="avg-block-time">0s</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🕐</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Last Block</div>
+                        <div class="stat-value" id="last-block-time">N/A</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="explorer-controls">
+                <div class="search-section">
+                    <div class="search-input-group">
+                        <input type="text" id="explorer-search" placeholder="Search by block number, hash, or address..." class="search-input">
+                        <button class="search-btn">🔍</button>
+                    </div>
+                </div>
+                
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label for="explorer-filter">Filter:</label>
+                        <select id="explorer-filter" class="filter-select">
+                            <option value="all">All</option>
+                            <option value="blocks">Blocks</option>
+                            <option value="transactions">Transactions</option>
+                            <option value="addresses">Addresses</option>
+                        </select>
+                    </div>
+                    
+                    <div class="sort-group">
+                        <label for="explorer-sort">Sort by:</label>
+                        <select id="explorer-sort" class="sort-select">
+                            <option value="timestamp">Timestamp</option>
+                            <option value="index">Block Index</option>
+                            <option value="hash">Hash</option>
+                        </select>
+                        <button id="explorer-sort-order" class="sort-order-btn">↓</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="explorer-loading" class="loading-indicator" style="display: none;">
+                <div class="loading-spinner"></div>
+                <span>Loading blockchain data...</span>
+            </div>
+
+            <!-- Results -->
+            <div class="explorer-results-section">
+                <div class="results-header">
+                    <h2>Search Results</h2>
+                    <div class="results-count" id="explorer-results-count">0 results</div>
+                </div>
+                
+                <div id="explorer-results" class="explorer-results">
+                    <!-- Results will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div id="explorer-pagination" class="explorer-pagination">
+                <button id="explorer-prev-page" class="pagination-btn" disabled>← Previous</button>
+                <div id="explorer-page-info" class="page-info">Page 1 of 1</div>
+                <button id="explorer-next-page" class="pagination-btn" disabled>Next →</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Block Detail Modal -->
+    <div id="block-detail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Block Details</h2>
+                <button id="close-block-detail" class="modal-close">×</button>
+            </div>
+            <div id="block-detail-content" class="modal-body">
+                <!-- Block details will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction Detail Modal -->
+    <div id="transaction-detail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Transaction Details</h2>
+                <button id="close-transaction-detail" class="modal-close">×</button>
+            </div>
+            <div id="transaction-detail-content" class="modal-body">
+                <!-- Transaction details will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Address Detail Modal -->
+    <div id="address-detail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Address Details</h2>
+                <button id="close-address-detail" class="modal-close">×</button>
+            </div>
+            <div id="address-detail-content" class="modal-body">
+                <!-- Address details will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="./js/ui/explorer.js?v=3.15.0&t=1761462000"></script>
+    <script type="module">
+        import { blockchainExplorer } from './js/ui/explorer.js';
+        
+        // Make explorer globally available for onclick handlers
+        window.explorer = blockchainExplorer;
+        
+        // Initialize explorer when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            blockchainExplorer.activate();
+        });
+    </script>
+</body>
+</html>

@@ -20,7 +20,8 @@ class PackageBuilder:
         self.cli_packages_dir = self.project_root / "cli-packages"
         self.dist_dir = self.project_root / "dist"
         self.packages_dir = self.dist_dir / "packages"
-        self.version = "3.13.14"
+        self.version = "3.15.0"
+        self.pyinstaller_path = "pyinstaller"  # Default path
         
         # Create directories
         self.dist_dir.mkdir(exist_ok=True)
@@ -54,13 +55,38 @@ class PackageBuilder:
         self.log("Checking dependencies...")
         
         # Check PyInstaller
-        try:
-            subprocess.run(['pyinstaller', '--version'], check=True, capture_output=True)
-            self.log("✅ PyInstaller is installed")
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        pyinstaller_paths = [
+            'pyinstaller',
+            '/Users/sarahmarin/Library/Python/3.9/bin/pyinstaller',
+            '/usr/local/bin/pyinstaller',
+            '/opt/homebrew/bin/pyinstaller'
+        ]
+        
+        pyinstaller_found = False
+        for path in pyinstaller_paths:
+            try:
+                subprocess.run([path, '--version'], check=True, capture_output=True)
+                self.pyinstaller_path = path
+                self.log(f"✅ PyInstaller found at {path}")
+                pyinstaller_found = True
+                break
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+        
+        if not pyinstaller_found:
             self.log("❌ PyInstaller not found. Installing...", "ERROR")
             if not self.run_command("pip3 install pyinstaller", "Installing PyInstaller"):
                 return False
+            # Try to find it after installation
+            for path in pyinstaller_paths:
+                try:
+                    subprocess.run([path, '--version'], check=True, capture_output=True)
+                    self.pyinstaller_path = path
+                    self.log(f"✅ PyInstaller found at {path}")
+                    pyinstaller_found = True
+                    break
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    continue
         
         # Check Python version
         if sys.version_info < (3, 8):
@@ -107,8 +133,8 @@ VSVersionInfo(
   ffi=FixedFileInfo(
     # filevers and prodvers should be always a tuple with four items: (1, 2, 3, 4)
     # Set not needed items to zero 0.
-    filevers=(3,4,0,0),
-    prodvers=(3,4,0,0),
+    filevers=(3,15,0,0),
+    prodvers=(3,15,0,0),
     # Contains a bitmask that specifies the valid bits 'flags'r
     mask=0x3f,
     # Contains a bitmask that specifies the Boolean attributes of the file.
@@ -166,7 +192,7 @@ VSVersionInfo(
         
         # Run PyInstaller
         spec_file = self.cli_packages_dir / "shared" / "specs" / "coinjecture.spec"
-        if not self.run_command(f"pyinstaller {spec_file}", f"Building {platform_name} executable"):
+        if not self.run_command(f"{self.pyinstaller_path} \"{spec_file}\"", f"Building {platform_name} executable"):
             return False
         
         # Move executable to packages directory
@@ -232,7 +258,7 @@ VSVersionInfo(
 !define COMPANYNAME "COINjecture"
 !define DESCRIPTION "Proof-of-Work Blockchain"
 !define VERSIONMAJOR 3
-!define VERSIONMINOR 4
+!define VERSIONMINOR 15
 !define VERSIONBUILD 0
 !define HELPURL "https://github.com/beanapologist/COINjecture"
 !define UPDATEURL "https://github.com/beanapologist/COINjecture"

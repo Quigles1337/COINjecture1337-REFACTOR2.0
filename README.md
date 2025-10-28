@@ -3,7 +3,7 @@
 > Built on Satoshi's foundation. Evolved with complexity theory. Driven by real-world utility. 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-3.13.14-blue.svg)](https://github.com/beanapologist/COINjecture)
+[![Version](https://img.shields.io/badge/version-3.15.0-blue.svg)](https://github.com/beanapologist/COINjecture)
 [![Status](https://img.shields.io/badge/status-live-green.svg)](https://api.coinjecture.com)
 
 ## Overview
@@ -60,26 +60,43 @@ COINjecture is a utility-based blockchain that proves computational work through
 
 ## 🚀 Download & Install
 
+### **🎉 COINjecture v3.15.0 - Dynamic Gas Calculation Release**
+
+**[📦 View All Downloads on GitHub](https://github.com/beanapologist/COINjecture/releases/tag/v3.15.0)**
+
 ### **macOS Users (Recommended)**
-**[Download COINjecture-macOS-v3.6.6-Final.zip](cli-packages/COINjecture-macOS-v3.6.6-Final.zip)** (39.2 MB)
+**[Download COINjecture-macOS-v3.15.0-Python.zip](https://github.com/beanapologist/COINjecture/releases/download/v3.15.0/COINjecture-macOS-v3.15.0-Python.zip)** (0.7 MB)  
+**[Download COINjecture-3.15.0-macOS.dmg](https://github.com/beanapologist/COINjecture/releases/download/v3.15.0/COINjecture-3.15.0-macOS.dmg)** (35.9 MB)
 
 **Features:**
-- ✅ **Zero Security Warnings**: Comprehensive security bypass
-- ✅ **No Python Required**: Completely self-contained
-- ✅ **Interactive Menu**: User-friendly interface
-- ✅ **Direct CLI Access**: Full command-line functionality
-- ✅ **Network Integration**: Live COINjecture blockchain
-- ✅ **Desktop Integration**: Desktop shortcuts and Applications folder
+- ✅ **Dynamic Gas Calculation**: IPFS-based gas costs (38K-600K+ gas range)
+- ✅ **Enhanced CLI**: All commands support dynamic gas calculation
+- ✅ **Interactive Menu**: User-friendly interface for beginners
+- ✅ **Direct CLI Access**: Full command-line functionality for advanced users
+- ✅ **Live Network Integration**: Real-time gas calculation during mining
+- ✅ **Cross-platform Support**: macOS, Windows, Linux packages
 
 **Installation:**
-1. Download the zip file above
+1. Download the package above
 2. Extract and run `./install.sh`
-3. **COINjecture launches automatically!** 🚀
-4. Zero macOS security warnings guaranteed!
+3. Launch with `./start_coinjecture.sh`
+4. **COINjecture launches automatically!** 🚀
 
-### **Other Platforms**
-- **Windows**: Coming soon
-- **Linux**: Coming soon
+### **Windows Users**
+**[Download COINjecture-Windows-v3.15.0-Python.zip](https://github.com/beanapologist/COINjecture/releases/download/v3.15.0/COINjecture-Windows-v3.15.0-Python.zip)** (0.7 MB)
+
+**Installation:**
+1. Download the package above
+2. Extract and run `install.bat`
+3. Launch with `start_coinjecture.bat`
+
+### **Linux Users**
+**[Download COINjecture-Linux-v3.15.0-Python.zip](https://github.com/beanapologist/COINjecture/releases/download/v3.15.0/COINjecture-Linux-v3.15.0-Python.zip)** (0.7 MB)
+
+**Installation:**
+1. Download the package above
+2. Extract and run `./install.sh`
+3. Launch with `./start_coinjecture.sh`
 
 ## Interactive CLI
 
@@ -243,7 +260,7 @@ assets/                     # Diagrams and assets
 
 ## Status
 
-**Version**: 3.13.14 (Live TestNet)  
+**Version**: 3.15.0 (Live TestNet)  
 **Status**: Production Ready  
 **License**: MIT  
 
@@ -260,6 +277,22 @@ assets/                     # Diagrams and assets
 - **Response Time**: < 100ms average
 - **Availability**: Global access
 - **Security**: Rate limiting, HMAC authentication
+
+## 🔗 GitHub Repository
+
+**[🌐 View on GitHub](https://github.com/beanapologist/COINjecture)**
+
+- **📦 Releases**: [Download v3.15.0 packages](https://github.com/beanapologist/COINjecture/releases/tag/v3.15.0)
+- **🐛 Issues**: [Report bugs and request features](https://github.com/beanapologist/COINjecture/issues)
+- **💬 Discussions**: [Community discussions](https://github.com/beanapologist/COINjecture/discussions)
+- **📚 Documentation**: Complete guides and API references
+- **⭐ Star**: Show your support for the project
+
+### **Quick Links**
+- [📋 Source Code](https://github.com/beanapologist/COINjecture)
+- [📦 Download Packages](https://github.com/beanapologist/COINjecture/releases)
+- [📖 Documentation](https://github.com/beanapologist/COINjecture/tree/main/docs)
+- [🔧 Development Setup](https://github.com/beanapologist/COINjecture/blob/main/ARCHITECTURE.README.md)
 
 ## Contributing
 

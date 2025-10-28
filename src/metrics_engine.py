@@ -109,7 +109,8 @@ class MetricsEngine:
             "transaction_processing": 500,
             "proof_verification": 2000,
             "commitment_verification": 1500,
-            "merkle_proof": 300
+            "merkle_proof": 300,
+            "mining": 11000  # Base gas for mining operations
         }
         
         try:
@@ -180,18 +181,37 @@ class MetricsEngine:
     def calculate_complexity_metrics(self, problem_data: dict, solution_data: dict) -> ComputationalComplexity:
         """Calculate complexity metrics from problem and solution data."""
         try:
-            solve_time = solution_data.get('solve_time', 1.0)
-            verify_time = solution_data.get('verify_time', 0.1)
-            memory_used = solution_data.get('memory_used', 1.0)
-            problem_size = problem_data.get('size', 1.0)
-            energy_used = solution_data.get('energy_used', 1.0)
-            
-            time_asymmetry = solve_time / max(verify_time, 0.001)
-            space_asymmetry = memory_used / max(problem_size, 1.0)
-            problem_weight = problem_data.get('difficulty', 1.0)
-            size_factor = math.log(problem_size + 1)
-            quality_score = solution_data.get('quality', 1.0)
-            energy_efficiency = (solve_time * problem_size) / max(energy_used, 0.001)
+            # Handle both direct field access and proof bundle structure
+            if isinstance(problem_data, dict) and 'complexity' in problem_data:
+                # This is a proof bundle structure
+                complexity_data = problem_data.get('complexity', {})
+                energy_metrics = problem_data.get('energy_metrics', {})
+                
+                solve_time = complexity_data.get('measured_solve_time', 1.0)
+                verify_time = complexity_data.get('measured_verify_time', 0.1)
+                problem_size = complexity_data.get('problem_size', 1.0)
+                energy_used = energy_metrics.get('solve_energy_joules', 1.0)
+                
+                time_asymmetry = complexity_data.get('asymmetry_time', solve_time / max(verify_time, 0.001))
+                space_asymmetry = complexity_data.get('asymmetry_space', 1.0)
+                problem_weight = problem_data.get('problem', {}).get('difficulty', 1.0)
+                size_factor = math.log(problem_size + 1)
+                quality_score = 1.0  # Default quality score
+                energy_efficiency = 1.0 / max(energy_used, 0.001)
+            else:
+                # Direct field access (legacy format)
+                solve_time = solution_data.get('solve_time', 1.0)
+                verify_time = solution_data.get('verify_time', 0.1)
+                memory_used = solution_data.get('memory_used', 1.0)
+                problem_size = problem_data.get('size', 1.0)
+                energy_used = solution_data.get('energy_used', 1.0)
+                
+                time_asymmetry = solve_time / max(verify_time, 0.001)
+                space_asymmetry = memory_used / max(problem_size, 1.0)
+                problem_weight = problem_data.get('difficulty', 1.0)
+                size_factor = math.log(problem_size + 1)
+                quality_score = solution_data.get('quality', 1.0)
+                energy_efficiency = (solve_time * problem_size) / max(energy_used, 0.001)
             
             return ComputationalComplexity(
                 time_asymmetry=time_asymmetry,

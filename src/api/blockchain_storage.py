@@ -488,5 +488,131 @@ class COINjectureStorage:
             print(f"❌ Error getting block {index}: {e}")
             return None
 
+    def update_block_gas(self, block_hash: str, new_gas: int) -> bool:
+        """Update gas_used value for a specific block"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE blocks 
+                SET gas_used = ? 
+                WHERE block_hash = ?
+            """, (new_gas, block_hash))
+            
+            conn.commit()
+            conn.close()
+            
+            if cursor.rowcount > 0:
+                print(f"✅ Updated gas for block {block_hash[:16]}... to {new_gas}")
+                return True
+            else:
+                print(f"⚠️  No block found with hash {block_hash[:16]}...")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error updating gas for block {block_hash[:16]}...: {e}")
+            return False
+
+    def get_blocks_in_timeframe(self, start_time: float, end_time: float) -> List[dict]:
+        """Get blocks within a time frame."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT height, block_bytes, work_score, gas_used, gas_limit, gas_price, 
+                       reward, cumulative_work 
+                FROM blocks 
+                WHERE timestamp >= ? AND timestamp <= ?
+                ORDER BY height ASC
+            ''', (start_time, end_time))
+            
+            results = cursor.fetchall()
+            conn.close()
+            
+            blocks = []
+            for result in results:
+                height, block_bytes, work_score, gas_used, gas_limit, gas_price, reward, cumulative_work = result
+                
+                # Parse block data
+                try:
+                    block_data = json.loads(block_bytes) if block_bytes else {}
+                except:
+                    block_data = {}
+                
+                blocks.append({
+                    'height': height,
+                    'block_hash': block_data.get('block_hash', ''),
+                    'timestamp': block_data.get('timestamp', 0),
+                    'miner_address': block_data.get('miner_address', ''),
+                    'work_score': work_score,
+                    'gas_used': gas_used,
+                    'gas_limit': gas_limit,
+                    'gas_price': gas_price,
+                    'reward': reward,
+                    'cumulative_work_score': cumulative_work
+                })
+            
+            return blocks
+            
+        except Exception as e:
+            print(f"❌ Error getting blocks in timeframe: {e}")
+            return []
+
+    def get_unique_miners(self, start_time: float, end_time: float) -> Set[str]:
+        """Get unique miner addresses in time frame."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT DISTINCT block_bytes 
+                FROM blocks 
+                WHERE timestamp >= ? AND timestamp <= ?
+            ''', (start_time, end_time))
+            
+            results = cursor.fetchall()
+            conn.close()
+            
+            miners = set()
+            for result in results:
+                block_bytes = result[0]
+                try:
+                    block_data = json.loads(block_bytes) if block_bytes else {}
+                    miner = block_data.get('miner_address', '')
+                    if miner:
+                        miners.add(miner)
+                except:
+                    continue
+            
+            return miners
+            
+        except Exception as e:
+            print(f"❌ Error getting unique miners: {e}")
+            return set()
+
+    def get_total_mining_attempts(self) -> int:
+        """Get total mining attempts (estimated from block count)."""
+        try:
+            latest_height = self.get_latest_height()
+            # Estimate: assume 10% success rate
+            return latest_height * 10
+        except Exception:
+            return 0
+
+    def calculate_success_rate(self) -> float:
+        """Calculate mining success rate."""
+        try:
+            latest_height = self.get_latest_height()
+            if latest_height <= 0:
+                return 0.0
+            
+            # Estimate based on recent activity
+            # This is a simplified calculation
+            return 10.0  # 10% estimated success rate
+        except Exception:
+            return 0.0
+
 # Global storage instance
 storage = COINjectureStorage(data_dir="/opt/coinjecture/data")

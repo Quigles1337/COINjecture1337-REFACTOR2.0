@@ -289,6 +289,10 @@ class ProblemRegistry:
             if num not in numbers:
                 return False
         
+        # CRITICAL: Check for duplicate numbers in solution (prevents cheating)
+        if len(solution) != len(set(solution)):
+            return False
+        
         # Check if sum equals target
         return sum(solution) == target
     

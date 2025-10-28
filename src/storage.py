@@ -65,6 +65,8 @@ class IPFSClient:
     timeout: int = 30
     max_retries: int = 3
     retry_delay: float = 1.0
+    pinata_api_key: Optional[str] = None
+    pinata_secret_key: Optional[str] = None
     
     def __post_init__(self):
         """Initialize IPFS client."""
@@ -218,6 +220,57 @@ class IPFSClient:
         import re
         base58btc_pattern = r'^[1-9A-HJ-NP-Za-km-z]+$'
         return bool(re.match(base58btc_pattern, cid))
+    
+    def pin_to_pinata(self, cid: str, name: str = "COINjecture Block") -> bool:
+        """
+        Pin a CID to Pinata for public accessibility.
+        
+        Args:
+            cid: IPFS CID to pin
+            name: Name for the pin
+            
+        Returns:
+            True if successfully pinned
+        """
+        if not self.pinata_api_key or not self.pinata_secret_key:
+            return False  # Pinata not configured
+        
+        try:
+            import requests  # type: ignore  # External dependency
+        except ImportError:
+            return False
+        
+        try:
+            url = "https://api.pinata.cloud/pinning/pinByHash"
+            
+            headers = {
+                "pinata_api_key": self.pinata_api_key,
+                "pinata_secret_api_key": self.pinata_secret_key,
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "hashToPin": cid,
+                "pinataMetadata": {
+                    "name": name,
+                    "keyvalues": {
+                        "type": "block",
+                        "blockchain": "coinjecture",
+                        "version": "3.15.0"
+                    }
+                },
+                "pinataOptions": {
+                    "cidVersion": 0
+                }
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=self.timeout)
+            response.raise_for_status()
+            
+            return True
+            
+        except Exception:
+            return False
 
 
 class StorageManager:
