@@ -30,6 +30,9 @@ export class MetricsDashboard {
         this.metricsTabs = document.querySelectorAll('.metrics-tab');
         this.tabContents = document.querySelectorAll('.metrics-tab-content');
         
+        console.log('🔍 Found metrics tabs:', this.metricsTabs.length);
+        console.log('🔍 Found tab contents:', this.tabContents.length);
+        
         // Overview elements
         this.validatedBlocks = document.getElementById('validated-blocks');
         this.latestBlock = document.getElementById('latest-block');
@@ -112,6 +115,9 @@ export class MetricsDashboard {
         this.searchBlockBtn = document.getElementById('search-block-btn');
         this.blockRangeSelect = document.getElementById('block-range-select');
         
+        console.log('🔍 Block data grid found:', !!this.blockDataGrid);
+        console.log('🔍 Block range select found:', !!this.blockRangeSelect);
+        
         // Complexity elements
         this.avgProblemSize = document.getElementById('avg-problem-size');
         this.avgSolveTime = document.getElementById('avg-solve-time');
@@ -131,10 +137,14 @@ export class MetricsDashboard {
      * Attach event listeners
      */
     attachEventListeners() {
+        console.log('🔗 Attaching event listeners...');
+        
         // Tab switching
-        this.metricsTabs.forEach(tab => {
+        this.metricsTabs.forEach((tab, index) => {
+            console.log(`🔗 Attaching listener to tab ${index}:`, tab);
             tab.addEventListener('click', (e) => {
                 const tabName = e.target.dataset.tab;
+                console.log(`🔗 Tab clicked: ${tabName}`);
                 this.switchTab(tabName);
             });
         });
@@ -192,6 +202,8 @@ export class MetricsDashboard {
      * Switch between tabs
      */
     switchTab(tabName) {
+        console.log(`🔄 Switching to tab: ${tabName}`);
+        
         // Update tab buttons
         this.metricsTabs.forEach(tab => {
             tab.classList.toggle('active', tab.dataset.tab === tabName);
@@ -207,15 +219,19 @@ export class MetricsDashboard {
         // Handle tab-specific initialization
         switch (tabName) {
             case 'live-feed':
+                console.log('🔄 Starting live feed...');
                 this.startLiveFeed();
                 break;
             case 'block-data':
+                console.log('🔄 Loading block data...');
                 this.loadBlockData();
                 break;
             case 'complexity':
+                console.log('🔄 Loading complexity data...');
                 this.loadComplexityData();
                 break;
             default:
+                console.log('🔄 Stopping live feed...');
                 this.stopLiveFeed();
                 break;
         }
@@ -276,7 +292,38 @@ export class MetricsDashboard {
                 }
             } catch (fallbackError) {
                 console.error('❌ Fallback also failed:', fallbackError);
-                this.showError('Failed to fetch metrics data');
+                // Final fallback: attempt direct health endpoint to seed minimal data
+                try {
+                    const healthResp = await fetch('https://api.coinjecture.com/health', { cache: 'no-cache' });
+                    if (healthResp.ok) {
+                        const health = await healthResp.json();
+                        console.log('📊 Health-based fallback data:', health);
+                        this.metricsData = {
+                            blockchain: {
+                                validated_blocks: health.latest_block_height || 0,
+                                latest_block: health.latest_block_height || 0,
+                                latest_hash: health.latest_block_hash || 'N/A',
+                                consensus_active: health.status === 'healthy',
+                                mining_attempts: 0,
+                                success_rate: 0
+                            },
+                            network: {
+                                active_peers: health.peers_connected || 0,
+                                active_miners: 0,
+                                avg_difficulty: 1
+                            },
+                            rewards: { total_distributed: 0, unit: 'BEANS' }
+                        };
+                        await this.updateMetricsDisplay();
+                        this.updateLastUpdatedTime();
+                        console.log('✅ Using health endpoint fallback');
+                    } else {
+                        this.showError('Health endpoint unavailable');
+                    }
+                } catch (healthErr) {
+                    console.error('❌ Health fallback failed:', healthErr);
+                    this.showError('Failed to fetch metrics data');
+                }
             }
         }
     }
@@ -296,7 +343,7 @@ export class MetricsDashboard {
         await this.updateNetworkMetrics();
         await this.updateRewardsMetrics();
         this.updateEfficiencyMetrics();
-        this.updateTransactionsList();
+        await this.updateTransactionsList();
     }
 
     /**
@@ -550,10 +597,49 @@ export class MetricsDashboard {
     /**
      * Update transactions list
      */
-    updateTransactionsList() {
+    async updateTransactionsList() {
         if (!this.transactionsList) return;
         
-        const transactions = this.metricsData.recent_transactions || [];
+        let transactions = this.metricsData?.recent_transactions || [];
+        
+        // If recent transactions is empty, fetch blocks individually
+        if (transactions.length === 0) {
+            console.log('📋 Recent transactions empty, fetching blocks for transaction list...');
+            try {
+                const latestBlock = this.metricsData?.blockchain?.latest_block || this.metricsData?.blockchain?.validated_blocks || 0;
+                const startBlock = Math.max(0, latestBlock - 9);
+                
+                for (let i = latestBlock; i >= startBlock && i >= 0; i--) {
+                    try {
+                        const block = await api.getBlockByIndex(i);
+                        if (block && block.data) {
+                            transactions.push({
+                                block_index: i,
+                                block_hash: block.data.block_hash || '',
+                                miner: block.data.miner_address || block.data.miner || 'Unknown',
+                                miner_address: block.data.miner_address || block.data.miner || 'Unknown',
+                                work_score: block.data.work_score || block.data.cumulative_work_score || 0,
+                                capacity: block.data.capacity || 'Unknown',
+                                timestamp: block.data.timestamp || 0,
+                                timestamp_display: block.data.timestamp ? new Date(block.data.timestamp * 1000).toLocaleString() : 'N/A',
+                                cid: block.data.cid || block.data.offchain_cid || block.data.ipfs_cid || 'N/A',
+                                gas_used: block.data.gas_used || 0,
+                                gas_limit: block.data.gas_limit || 1000000,
+                                gas_price: block.data.gas_price || 0.000001,
+                                reward: block.data.reward || 0
+                            });
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to fetch block ${i} for transaction list:`, error);
+                    }
+                }
+                
+                // Reverse to get chronological order
+                transactions = transactions.reverse();
+            } catch (error) {
+                console.error('Failed to fetch blocks for transaction list:', error);
+            }
+        }
         
         if (transactions.length === 0) {
             this.transactionsList.innerHTML = '<div class="no-transactions">No recent transactions</div>';
@@ -567,6 +653,9 @@ export class MetricsDashboard {
                 <span class="transaction-miner">${tx.miner ? tx.miner.substring(0, 16) + '...' : 'N/A'}</span>
                 <span class="transaction-work">${tx.work_score || 0}</span>
                 <span class="transaction-capacity">${tx.capacity || 'N/A'}</span>
+                <span class="transaction-cid">${tx.cid ? tx.cid.substring(0, 16) + '...' : 'N/A'}</span>
+                <span class="transaction-gas">${tx.gas_used || 0}</span>
+                <span class="transaction-reward">${tx.reward || 0}</span>
             </div>
         `).join('');
         
@@ -835,11 +924,18 @@ export class MetricsDashboard {
      * Load block data
      */
     async loadBlockData() {
-        if (!this.blockDataGrid) return;
+        if (!this.blockDataGrid) {
+            console.warn('Block data grid not found');
+            return;
+        }
+        
+        console.log('📦 Loading block data...');
         
         try {
             const range = this.blockRangeSelect?.value || 10;
+            console.log(`📦 Fetching ${range} blocks...`);
             const blocks = await this.fetchBlockRange(range);
+            console.log(`📦 Fetched ${blocks.length} blocks:`, blocks);
             this.displayBlockData(blocks);
             
         } catch (error) {
@@ -853,11 +949,63 @@ export class MetricsDashboard {
      */
     async fetchBlockRange(count) {
         try {
+            console.log(`📦 Fetching block range: ${count} blocks`);
             const metrics = await api.getMetricsDashboard();
             const recentTransactions = metrics?.data?.recent_transactions || [];
             
-            // Use the recent transactions data which contains block information
-            return recentTransactions.slice(0, count);
+            console.log(`📦 Recent transactions length: ${recentTransactions.length}`);
+            
+            // If we have recent transactions, use them
+            if (recentTransactions.length > 0) {
+                console.log('📦 Using recent transactions data');
+                return recentTransactions.slice(0, count);
+            }
+            
+            // Otherwise, fetch blocks individually
+            console.log('📦 Recent transactions empty, fetching blocks individually...');
+            const latestBlock = metrics?.data?.blockchain?.latest_block || metrics?.data?.blockchain?.validated_blocks || 0;
+            console.log(`📦 Latest block: ${latestBlock}`);
+            
+            const blocks = [];
+            
+            // Fetch the last N blocks
+            const startBlock = Math.max(0, latestBlock - count + 1);
+            console.log(`📦 Fetching blocks from ${startBlock} to ${latestBlock}`);
+            
+            for (let i = latestBlock; i >= startBlock && i >= 0; i--) {
+                try {
+                    console.log(`📦 Fetching block ${i}...`);
+                    const block = await api.getBlockByIndex(i);
+                    console.log(`📦 Block ${i} response:`, block);
+                    
+                    if (block && block.data) {
+                        const blockData = {
+                            block_index: i,
+                            block_hash: block.data.block_hash || '',
+                            miner: block.data.miner_address || block.data.miner || 'Unknown',
+                            miner_address: block.data.miner_address || block.data.miner || 'Unknown',
+                            work_score: block.data.work_score || block.data.cumulative_work_score || 0,
+                            capacity: block.data.capacity || 'Unknown',
+                            timestamp: block.data.timestamp || 0,
+                            timestamp_display: block.data.timestamp ? new Date(block.data.timestamp * 1000).toLocaleString() : 'N/A',
+                            cid: block.data.cid || block.data.offchain_cid || block.data.ipfs_cid || 'N/A',
+                            gas_used: block.data.gas_used || 0,
+                            gas_limit: block.data.gas_limit || 1000000,
+                            gas_price: block.data.gas_price || 0.000001,
+                            reward: block.data.reward || 0
+                        };
+                        console.log(`📦 Processed block ${i}:`, blockData);
+                        blocks.push(blockData);
+                    } else {
+                        console.warn(`📦 Block ${i} has no data:`, block);
+                    }
+                } catch (error) {
+                    console.warn(`Failed to fetch block ${i}:`, error);
+                }
+            }
+            
+            console.log(`📦 Fetched ${blocks.length} blocks total`);
+            return blocks.reverse(); // Return in chronological order
             
         } catch (error) {
             console.error('Failed to fetch block range:', error);
@@ -869,9 +1017,15 @@ export class MetricsDashboard {
      * Display block data
      */
     displayBlockData(blocks) {
-        if (!this.blockDataGrid) return;
+        if (!this.blockDataGrid) {
+            console.warn('Block data grid not found in displayBlockData');
+            return;
+        }
+        
+        console.log(`📦 Displaying ${blocks.length} blocks:`, blocks);
         
         if (blocks.length === 0) {
+            console.log('📦 No blocks to display, showing "No block data available"');
             this.blockDataGrid.innerHTML = '<div class="no-blocks">No block data available</div>';
             return;
         }
@@ -896,17 +1050,31 @@ export class MetricsDashboard {
                         <span class="block-detail-value">${block.work_score || 0}</span>
                     </div>
                     <div class="block-detail">
+                        <span class="block-detail-label">Gas Used:</span>
+                        <span class="block-detail-value">${block.gas_used || 0}</span>
+                    </div>
+                    <div class="block-detail">
+                        <span class="block-detail-label">Reward:</span>
+                        <span class="block-detail-value">${block.reward || 0} BEANS</span>
+                    </div>
+                    <div class="block-detail">
                         <span class="block-detail-label">Timestamp:</span>
                         <span class="block-detail-value">${block.timestamp_display || new Date(block.timestamp * 1000).toLocaleString()}</span>
                     </div>
                 </div>
                 <div class="block-card-actions">
-                    <a href="#" class="block-action-btn primary" onclick="window.openIPFSViewer('${block.cid}')">View IPFS</a>
-                    <a href="#" class="block-action-btn" onclick="window.downloadProofBundle('${block.cid}')">Download</a>
+                    ${block.cid && block.cid !== 'N/A' ? `
+                        <a href="#" class="block-action-btn primary" onclick="window.openIPFSViewer('${block.cid}')">View IPFS</a>
+                        <a href="#" class="block-action-btn" onclick="window.downloadProofBundle('${block.cid}')">Download</a>
+                    ` : `
+                        <button class="block-action-btn" disabled title="No CID available yet">View IPFS</button>
+                        <button class="block-action-btn" disabled title="No proof available yet">Download</button>
+                    `}
                 </div>
             </div>
         `).join('');
         
+        console.log('📦 Setting block data grid HTML');
         this.blockDataGrid.innerHTML = blocksHtml;
     }
 
@@ -940,7 +1108,42 @@ export class MetricsDashboard {
             console.log('🧮 Loading complexity data...');
             
             // Get recent transactions to analyze complexity
-            const recentTransactions = this.metricsData?.recent_transactions || [];
+            let recentTransactions = this.metricsData?.recent_transactions || [];
+            
+            // If recent transactions is empty, fetch blocks individually
+            if (recentTransactions.length === 0) {
+                console.log('🧮 Recent transactions empty, fetching blocks for complexity analysis...');
+                try {
+                    const latestBlock = this.metricsData?.blockchain?.latest_block || this.metricsData?.blockchain?.validated_blocks || 0;
+                    const startBlock = Math.max(0, latestBlock - 99); // Get last 100 blocks for analysis
+                    
+                    for (let i = latestBlock; i >= startBlock && i >= 0; i--) {
+                        try {
+                            const block = await api.getBlockByIndex(i);
+                            if (block && block.data) {
+                                recentTransactions.push({
+                                    block_index: i,
+                                    block_hash: block.data.block_hash || '',
+                                    miner: block.data.miner_address || block.data.miner || 'Unknown',
+                                    miner_address: block.data.miner_address || block.data.miner || 'Unknown',
+                                    work_score: block.data.work_score || block.data.cumulative_work_score || 0,
+                                    capacity: block.data.capacity || 'Unknown',
+                                    timestamp: block.data.timestamp || 0,
+                                    gas_used: block.data.gas_used || 0,
+                                    reward: block.data.reward || 0
+                                });
+                            }
+                        } catch (error) {
+                            console.warn(`Failed to fetch block ${i} for complexity analysis:`, error);
+                        }
+                    }
+                    
+                    // Reverse to get chronological order
+                    recentTransactions = recentTransactions.reverse();
+                } catch (error) {
+                    console.error('Failed to fetch blocks for complexity analysis:', error);
+                }
+            }
             
             // Calculate complexity metrics from recent transactions
             const complexityData = this.calculateComplexityMetrics(recentTransactions);
@@ -995,11 +1198,15 @@ export class MetricsDashboard {
         const avgVerifyTime = 50; // Estimated verification time
         const timeAsymmetry = avgSolveTime / avgVerifyTime;
         
-        // Energy calculations (simplified)
+        // Energy calculations (improved)
         const totalEnergy = gasUsed.reduce((sum, gas) => sum + gas, 0) * 0.001; // Convert gas to energy
-        const avgPower = totalEnergy / (transactions.length * 0.1); // Assuming 0.1s average time
+        const avgPower = totalEnergy > 0 ? totalEnergy / (transactions.length * 0.1) : 0; // Assuming 0.1s average time
         const avgCpu = Math.min(100, Math.max(20, avgPower / 10));
         const avgMemory = Math.min(100, Math.max(10, avgProblemSize * 2));
+        
+        // If no gas data, estimate from work scores
+        const estimatedEnergy = totalEnergy > 0 ? totalEnergy : workScores.reduce((sum, score) => sum + score, 0) * 0.01;
+        const estimatedPower = estimatedEnergy > 0 ? estimatedEnergy / (transactions.length * 0.1) : 0;
         
         return {
             avg_problem_size: avgProblemSize,

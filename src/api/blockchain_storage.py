@@ -384,7 +384,7 @@ class COINjectureStorage:
             # Actually retrieve data from IPFS
             from storage import IPFSClient
             
-            ipfs_client = IPFSClient("http://localhost:5001")
+            ipfs_client = IPFSClient("http://localhost:8080")
             if not ipfs_client.health_check():
                 print(f"❌ IPFS daemon not available for CID: {cid}")
                 return None
@@ -480,6 +480,17 @@ class COINjectureStorage:
                     'reward': result[5] if result[5] is not None else 0,
                     'cumulative_work_score': result[6] if result[6] is not None else 0
                 })
+                
+                # Extract CID from block data if available
+                if 'cid' in block_data:
+                    block_data['cid'] = block_data['cid']
+                elif 'offchain_cid' in block_data:
+                    block_data['cid'] = block_data['offchain_cid']
+                elif 'ipfs_cid' in block_data:
+                    block_data['cid'] = block_data['ipfs_cid']
+                else:
+                    block_data['cid'] = None
+                
                 return block_data
             else:
                 return None

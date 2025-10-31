@@ -22,6 +22,19 @@ metrics_engine = get_metrics_engine()
 # Initialize problem registry for solution validation
 problem_registry = ProblemRegistry()
 
+# Initialize equilibrium service for CID gossip
+try:
+    from equilibrium_service import get_equilibrium_service
+    equilibrium_service = get_equilibrium_service()
+    if equilibrium_service:
+        equilibrium_service.start()
+        logger.info("✅ Equilibrium gossip service started")
+    else:
+        logger.warning("⚠️  Equilibrium service not available")
+except Exception as e:
+    logger.warning(f"⚠️  Could not start equilibrium service: {e}")
+    equilibrium_service = None
+
 # Helper functions for dynamic metric calculations
 def calculate_tps(seconds: int) -> float:
     """Calculate transactions per second over time window."""
@@ -832,6 +845,8 @@ def ingest_block():
         real_solution_data = solution_data
         final_cid = cid
         
+        # CRITICAL: In a distributed P2P system, blocks MUST have valid CIDs
+        # Miners should generate CIDs before submitting - API server validates, not generates
         if cid:
             try:
                 # Fetch real data from IPFS using CID
@@ -840,17 +855,22 @@ def ingest_block():
                     real_problem_data = ipfs_data.get('problem_data', problem_data)
                     real_solution_data = ipfs_data.get('solution_data', solution_data)
                     logger.info(f"📦 Retrieved real data from IPFS CID: {cid[:16]}...")
+                    final_cid = cid
                 else:
-                    logger.warning(f"⚠️  Could not retrieve data from IPFS CID: {cid[:16]}...")
-                    # Create and upload proof data to IPFS
-                    final_cid = create_and_upload_proof_data(block_hash, block_index, miner_address, work_score, problem_data, solution_data)
+                    # CID provided but not found in IPFS - reject block
+                    logger.error(f"❌ CID {cid[:16]}... not found in IPFS - rejecting block")
+                    return jsonify({'status': 'error', 'message': f'CID {cid[:16]}... not found in IPFS - block rejected'}), 400
             except Exception as e:
-                logger.warning(f"⚠️  IPFS retrieval failed: {e}")
-                # Create and upload proof data to IPFS
-                final_cid = create_and_upload_proof_data(block_hash, block_index, miner_address, work_score, problem_data, solution_data)
+                logger.error(f"❌ IPFS retrieval failed for CID {cid[:16]}...: {e} - rejecting block")
+                return jsonify({'status': 'error', 'message': f'IPFS validation failed - block rejected'}), 400
         else:
-            # No CID provided, create and upload proof data to IPFS
+            # No CID provided - in P2P system, miners must provide CIDs
+            # Try to generate as fallback for backward compatibility, but warn
+            logger.warning(f"⚠️  No CID provided - generating CID for backward compatibility")
             final_cid = create_and_upload_proof_data(block_hash, block_index, miner_address, work_score, problem_data, solution_data)
+            if not final_cid:
+                logger.error(f"❌ CID generation failed - rejecting block")
+                return jsonify({'status': 'error', 'message': 'CID generation failed - IPFS unavailable. Miners must provide valid CIDs.'}), 503
         
         # Calculate gas and rewards using real data from IPFS
         # Create a proof bundle structure for the metrics engine
@@ -895,6 +915,19 @@ def ingest_block():
         
         reward = metrics_engine.calculate_block_reward(work_score, network_state)
         
+        # CRITICAL: In distributed P2P system, blocks MUST have valid CIDs before storage
+        if not final_cid or final_cid == '':
+            logger.error(f"❌ Block rejected: No valid CID - {final_cid}")
+            return jsonify({'status': 'error', 'message': 'Block rejected: No valid CID. Miners must generate CIDs before submission.'}), 400
+        
+        # Queue CID for equilibrium gossip (if equilibrium service is running)
+        if equilibrium_service:
+            try:
+                equilibrium_service.announce_cid(final_cid)
+                logger.debug(f"📬 CID queued for equilibrium broadcast: {final_cid[:16]}...")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not queue CID for gossip: {e}")
+        
         # Prepare block data
         block_data = {
             'block_hash': block_hash,
@@ -918,7 +951,7 @@ def ingest_block():
             'is_full_block': True
         }
         
-        # Store the block
+        # Store the block (only after CID validation)
         storage.add_block_data(block_data)
         
         logger.info(f'Block ingested: {block_hash[:16]}... by {miner_address[:16]}... (work: {work_score}, reward: {reward:.6f})')

@@ -216,7 +216,9 @@ class Node:
                 problem_registry=self.problem_registry,
                 peer_id=f"node-{self.config.role.value}"
             )
-            self.logger.info("Network service started")
+            # Start equilibrium enforcement loops (λ = η = 1/√2)
+            self.network.start_equilibrium_loops()
+            self.logger.info("Network service started with equilibrium enforcement")
             
             # Sync headers
             self._sync_headers()
@@ -240,7 +242,8 @@ class Node:
         self.mining_active = False
         
         if self.network:
-            # NetworkProtocol doesn't have a stop method, just set to None
+            # Stop equilibrium loops before removing network
+            self.network.stop_equilibrium_loops()
             self.network = None
         
         if self.storage:

@@ -20,6 +20,15 @@ Flask-Limiter>=2.0.0
 # zstandard>=0.18.0  # Uncomment for zstd compression support
 # python-snappy>=0.6.0  # Uncomment for snappy compression support
 
+# Testing dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-timeout>=2.1.0
+
 # Optional: For production deployments
 # sqlite3 is included in Python standard library
 # LevelDB/RocksDB bindings can be added for production use
+
+# Optional: For simulation tests
+# numpy>=1.21.0  # Uncomment for network simulation tests
+# matplotlib>=3.5.0  # Uncomment for plotting equilibrium graphs

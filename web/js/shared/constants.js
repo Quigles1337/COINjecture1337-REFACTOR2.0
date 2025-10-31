@@ -5,8 +5,8 @@
 export const API_CONFIG = {
   BASE_URL: 'https://api.coinjecture.com',
   FALLBACK_URL: 'http://167.172.213.70:12346',
-  TIMEOUT: 10000,
-  RETRY_ATTEMPTS: 3
+  TIMEOUT: 25000,
+  RETRY_ATTEMPTS: 5
 };
 
 // API Endpoints

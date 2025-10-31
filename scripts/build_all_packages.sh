@@ -5,11 +5,11 @@
 
 set -e
 
-echo "🚀 COINjecture v3.16.0 - Complete Package Builder"
+echo "🚀 COINjecture v3.16.1 - Complete Package Builder"
 echo "=================================================="
 
 # Configuration
-VERSION="3.16.0"
+VERSION="3.16.1"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$PROJECT_ROOT/dist"
 PACKAGES_DIR="$DIST_DIR/packages"

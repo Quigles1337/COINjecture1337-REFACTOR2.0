@@ -245,12 +245,14 @@ export const domUtils = {
     // Import IPFS_GATEWAYS dynamically to avoid circular imports
     // Use public gateways first for better reliability
     const gateways = [
+      // Prefer local gateway first to ensure freshest, pinned content
+      'http://167.172.213.70:8080/ipfs/',
+      // Public gateways as fallbacks (may lag on newly pinned CIDs)
       'https://ipfs.io/ipfs/',
       'https://cloudflare-ipfs.com/ipfs/',
       'https://gateway.pinata.cloud/ipfs/',
       'https://dweb.link/ipfs/',
-      'https://gateway.ipfs.io/ipfs/',
-      'http://167.172.213.70:8080/ipfs/' // Local gateway as fallback
+      'https://gateway.ipfs.io/ipfs/'
     ];
     
     const gatewayUrls = gateways.map(gateway => `${gateway}${cid}`);

@@ -41,6 +41,11 @@ window.showIPFSModal = domUtils.showIPFSModal;
 // Global download proof bundle function
 window.downloadProofBundle = async function(cid) {
     try {
+        if (!cid || cid === 'N/A') {
+            console.warn('No valid CID provided for proof download');
+            alert('No proof available for this block yet.');
+            return;
+        }
         console.log(`📦 Downloading proof bundle: ${cid}`);
         
         // Try to get data via API first
