@@ -1,0 +1,169 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coinjecture"
+version = "4.0.0"
+description = "Blockchain with computational proof-of-work and equilibrium gossip"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Quigles1337", email = "adz@alphx.io"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "msgspec>=0.18.0",
+    "cryptography>=41.0.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-cov>=4.1.0",
+    "hypothesis>=6.82.0",
+    "black>=23.7.0",
+    "ruff>=0.0.280",
+    "mypy>=1.4.1",
+    "pre-commit>=3.3.3",
+    "bandit[toml]>=1.7.5",
+    "pip-audit>=2.6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Quigles1337/COINjecture1337"
+Repository = "https://github.com/Quigles1337/COINjecture1337"
+Issues = "https://github.com/Quigles1337/COINjecture1337/issues"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+markers = [
+    "unit: Unit tests",
+    "simulation: Network simulation tests",
+    "stress: Stress tests",
+    "integration: Integration tests",
+    "slow: Slow-running tests",
+    "property: Property-based tests",
+    "fuzz: Fuzz tests",
+    "golden: Golden vector tests",
+]
+asyncio_mode = "auto"
+timeout = 300
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C",   # flake8-comprehensions
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "S",   # bandit security
+    "A",   # flake8-builtins
+    "DTZ", # flake8-datetimez
+    "T20", # flake8-print
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "S101",  # use of assert (ok in tests)
+    "T201",  # print statements (ok in CLI)
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106", "S108"]
+"src/cli.py" = ["T201"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "msgspec.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "hypothesis.*"
+ignore_missing_imports = true
+
+[tool.bandit]
+targets = ["src"]
+exclude_dirs = ["tests", "scripts"]
+skips = ["B101", "B601"]  # assert_used, paramiko_calls
+
+[tool.bandit.assert_used]
+skips = ["*/test_*.py"]
