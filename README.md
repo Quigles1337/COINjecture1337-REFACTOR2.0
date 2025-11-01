@@ -296,7 +296,7 @@ assets/                     # Diagrams and assets
 
 ## 🔍 AUDIT AND REFACTORING pt1
 
-### Architecture Diagrams
+### Architecture Diagrams by Quigles1337
 
 **v4.0.0 Refactor:** COINjecture has undergone a comprehensive security audit and architectural refactor. Below are the current system architecture diagrams that show how the components interact.
 
