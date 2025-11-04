@@ -1,0 +1,34 @@
+[
+  {
+    "name": "header_block_1",
+    "header": {
+      "codec_version": 1,
+      "block_index": 1,
+      "timestamp": 1609459260,
+      "parent_hash": "PLACEHOLDER_GENESIS_HASH",
+      "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+      "miner_address": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "commitment": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "difficulty_target": 1000,
+      "nonce": 42,
+      "extra_data": ""
+    },
+    "expected_hash": "PLACEHOLDER_BLOCK_1_HASH"
+  },
+  {
+    "name": "header_block_100",
+    "header": {
+      "codec_version": 1,
+      "block_index": 100,
+      "timestamp": 1609465200,
+      "parent_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "merkle_root": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "miner_address": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "commitment": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "difficulty_target": 5000,
+      "nonce": 999,
+      "extra_data": "474f4c44454e"
+    },
+    "expected_hash": "PLACEHOLDER_BLOCK_100_HASH"
+  }
+]

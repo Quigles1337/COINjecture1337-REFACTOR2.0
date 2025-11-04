@@ -1,0 +1,74 @@
+[package]
+name = "coinjecture-core"
+version = "4.0.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Quigles1337 <adz@alphx.io>"]
+description = "Consensus-critical core for COINjecture blockchain - institutional-grade, deterministic, verifiable"
+license = "MIT"
+repository = "https://github.com/Quigles1337/COINjecture1337-REFACTOR"
+keywords = ["blockchain", "consensus", "np-complete", "cryptocurrency"]
+categories = ["cryptography", "algorithms"]
+
+[lib]
+name = "coinjecture_core"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+# Serialization - DETERMINISTIC canonical codec
+rmp-serde = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Cryptography - consensus-critical hashing & signatures
+sha2 = "0.10"
+ed25519-dalek = { version = "2.1", features = ["serde"] }
+hmac = "0.12"
+
+# Python bindings
+pyo3 = { version = "0.20", features = ["extension-module"], optional = true }
+
+# Error handling - no panics in consensus path
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Utilities
+hex = "0.4"
+base64 = "0.21"
+
+[dev-dependencies]
+# Testing
+criterion = { version = "0.5", features = ["html_reports"] }
+quickcheck = "1.0"
+quickcheck_macros = "1.0"
+proptest = "1.4"
+pretty_assertions = "1.4"
+
+# Test utilities
+tempfile = "3.8"
+serde_test = "1.0"
+
+[features]
+default = []
+python = ["pyo3"]
+strict-determinism = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.bench]
+inherits = "release"
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[package.metadata.maturin]
+name = "coinjecture_core"
+python-source = "python"
