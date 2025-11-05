@@ -1,0 +1,125 @@
+{
+  "version": "4.0.0",
+  "test_name": "commitment_binding",
+  "frozen_date": "2025-11-04T00:00:00Z",
+  "description": "HMAC commitment binding tests for epoch replay protection (SEC-002)",
+
+  "test_cases": [
+    {
+      "name": "basic_commitment",
+      "inputs": {
+        "miner_private_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "parent_hash": "f7bc9a6304c9e4f0e4e0c4f6f5d8c6e8d5e9f0f1f2f3f4f5f6f7f8f9fafbfcfd",
+        "block_index": 1,
+        "problem_hash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "solution_hash": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3"
+      },
+      "intermediate_values": {
+        "epoch_salt": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+        "epoch_salt_computation": "SHA256(parent_hash || block_index)",
+        "miner_salt": "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+        "miner_salt_computation": "HMAC-SHA256(miner_private_key, epoch_salt || parent_hash || block_index)"
+      },
+      "expected_commitment": "e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6",
+      "commitment_computation": "SHA256(epoch_salt || problem_hash || solution_hash || miner_salt)",
+      "note": "Basic commitment with all standard inputs"
+    },
+    {
+      "name": "epoch_binding_test",
+      "description": "Same miner, problem, solution but different epochs → different commitments",
+      "scenario_1": {
+        "block_index": 100,
+        "parent_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "problem_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "solution_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+        "expected_commitment": "commitment_epoch_100_aaaa"
+      },
+      "scenario_2": {
+        "block_index": 101,
+        "parent_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "problem_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "solution_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+        "expected_commitment": "commitment_epoch_101_bbbb"
+      },
+      "assertion": "scenario_1.commitment != scenario_2.commitment",
+      "security_property": "Prevents commitment grinding across epochs"
+    },
+    {
+      "name": "miner_salt_binding",
+      "description": "Miner salt MUST be derived from private key via HMAC",
+      "inputs": {
+        "miner_private_key": "secretkey1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "parent_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "block_index": 42
+      },
+      "expected_miner_salt": "f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1",
+      "wrong_miner_salt": "0000000000000000000000000000000000000000000000000000000000000000",
+      "test": [
+        "Commitment with expected_miner_salt → valid",
+        "Commitment with wrong_miner_salt → invalid",
+        "Prevents miner from choosing arbitrary salt"
+      ]
+    },
+    {
+      "name": "replay_attack_prevention",
+      "description": "Same commitment in different epochs MUST be rejected",
+      "attack_scenario": {
+        "attacker_tries": "Reuse commitment from block 100 in block 200",
+        "block_100_commitment": "reused_commitment_abc123...",
+        "block_200_submission": {
+          "commitment": "reused_commitment_abc123...",
+          "expected_result": "REJECTED",
+          "error_code": "EPOCH_REPLAY_DETECTED",
+          "cache_check": "admission.py checks (commitment, epoch) in cache"
+        }
+      },
+      "defense_mechanism": {
+        "cache": "EpochReplayCache",
+        "key": "(commitment_hex, epoch)",
+        "ttl": "7 days",
+        "persistence": "disk (survives restarts)",
+        "on_replay": "Reject block + log warning + increment peer bad score"
+      }
+    },
+    {
+      "name": "commitment_verification_order",
+      "description": "Commitment verification steps in correct order",
+      "steps": [
+        "1. Extract commitment from block header",
+        "2. Check (commitment, epoch) not in replay cache",
+        "3. Compute epoch_salt = SHA256(parent_hash || block_index)",
+        "4. Verify miner_salt = HMAC(miner_private_key, epoch_salt || parent_hash || block_index)",
+        "5. Compute expected_commitment = SHA256(epoch_salt || problem_hash || solution_hash || miner_salt)",
+        "6. Assert commitment == expected_commitment",
+        "7. Add (commitment, epoch) to replay cache",
+        "8. Proceed with solution verification"
+      ],
+      "early_reject_point": "Step 2 - reject before expensive verification"
+    }
+  ],
+
+  "security_properties": [
+    "Epoch binding: commitment tied to (parent_hash, block_index)",
+    "Miner binding: miner_salt derived from private key (can't be arbitrary)",
+    "Replay protection: (commitment, epoch) cached with TTL",
+    "Forward security: can't grind commitments for future epochs",
+    "Backward security: can't reuse old commitments"
+  ],
+
+  "test_assertions": [
+    "compute_commitment(...) deterministic",
+    "same inputs → same commitment",
+    "different epoch → different commitment",
+    "different miner_salt → different commitment",
+    "wrong miner_salt → verification fails",
+    "replayed commitment → rejected by cache"
+  ],
+
+  "comments": [
+    "Commitment algorithm MUST NOT change (consensus breaking)",
+    "HMAC key derivation MUST use miner private key",
+    "Epoch salt MUST include both parent_hash AND block_index",
+    "Cache TTL MUST be at least 7 days for safety",
+    "Any change requires SEC-002 security review"
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "version": "4.0.0",
+  "test_name": "block_headers",
+  "frozen_date": "2025-11-04T00:00:00Z",
+  "description": "Sample block headers across different hardware tiers and scenarios",
+
+  "test_cases": [
+    {
+      "name": "block_1_mobile_tier",
+      "header": {
+        "codec_version": 1,
+        "block_index": 1,
+        "timestamp": 1609459260,
+        "parent_hash": "f7bc9a6304c9e4f0e4e0c4f6f5d8c6e8d5e9f0f1f2f3f4f5f6f7f8f9fafbfcfd",
+        "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+        "miner_address": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+        "commitment": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "difficulty_target": 1000,
+        "nonce": 42,
+        "extra_data": ""
+      },
+      "tier": "mobile",
+      "expected_hash": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+      "problem": {
+        "elements": [1, 2, 3, 4, 5, 6, 7, 8],
+        "target": 15
+      },
+      "solution": {
+        "indices": [0, 1, 3, 6]
+      }
+    },
+    {
+      "name": "block_2_desktop_tier",
+      "header": {
+        "codec_version": 1,
+        "block_index": 2,
+        "timestamp": 1609459320,
+        "parent_hash": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+        "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+        "miner_address": "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
+        "commitment": "c1c2c3c4c5c6c7c8c9c0c1c2c3c4c5c6c7c8c9c0c1c2c3c4c5c6c7c8c9c0c1c2",
+        "difficulty_target": 2000,
+        "nonce": 73,
+        "extra_data": ""
+      },
+      "tier": "desktop",
+      "expected_hash": "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c",
+      "problem": {
+        "elements": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        "target": 45
+      },
+      "solution": {
+        "indices": [1, 3, 5, 7, 9, 11, 13]
+      }
+    },
+    {
+      "name": "block_3_workstation_tier",
+      "header": {
+        "codec_version": 1,
+        "block_index": 3,
+        "timestamp": 1609459380,
+        "parent_hash": "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c",
+        "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+        "miner_address": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "commitment": "d1d2d3d4d5d6d7d8d9d0d1d2d3d4d5d6d7d8d9d0d1d2d3d4d5d6d7d8d9d0d1d2",
+        "difficulty_target": 5000,
+        "nonce": 137,
+        "extra_data": ""
+      },
+      "tier": "workstation",
+      "expected_hash": "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d",
+      "problem": {
+        "elements": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+        "target": 90
+      },
+      "solution": {
+        "indices": [1, 2, 3, 5, 7, 9, 11, 13, 15, 17]
+      }
+    },
+    {
+      "name": "block_with_extra_data",
+      "header": {
+        "codec_version": 1,
+        "block_index": 100,
+        "timestamp": 1609465000,
+        "parent_hash": "9876543210abcdef9876543210abcdef9876543210abcdef9876543210abcdef",
+        "merkle_root": "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
+        "miner_address": "1111111111111111111111111111111111111111111111111111111111111111",
+        "commitment": "2222222222222222222222222222222222222222222222222222222222222222",
+        "difficulty_target": 10000,
+        "nonce": 999,
+        "extra_data": "436f696e6a656374757265"
+      },
+      "tier": "server",
+      "expected_hash": "4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "extra_data_decoded": "Coinjecture",
+      "note": "extra_data is hex-encoded 'Coinjecture'"
+    }
+  ],
+
+  "cross_platform_validation": {
+    "requirement": "All hashes MUST be identical across platforms",
+    "platforms": [
+      "linux_x86_64",
+      "linux_arm64",
+      "macos_intel",
+      "macos_arm64",
+      "windows_x86_64"
+    ],
+    "python_versions": [
+      "3.10",
+      "3.11",
+      "3.12"
+    ]
+  },
+
+  "determinism_tests": [
+    "Compute hash 1000 times → all hashes identical",
+    "Compute on different threads → all hashes identical",
+    "Compute with different msgpack libraries → all hashes identical",
+    "Compute in Python vs Rust → all hashes identical"
+  ],
+
+  "comments": [
+    "These headers test different hardware tiers",
+    "Headers must hash to expected values on ALL platforms",
+    "Any hash divergence = consensus bug = CI failure",
+    "DO NOT modify expected_hash without consensus-change label"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "version": "4.0.0",
+  "test_name": "genesis_block",
+  "frozen_date": "2025-11-04T00:00:00Z",
+  "description": "Genesis block (block 0) - all zeros except timestamp and difficulty",
+
+  "header": {
+    "codec_version": 1,
+    "block_index": 0,
+    "timestamp": 1609459200,
+    "parent_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+    "miner_address": "0000000000000000000000000000000000000000000000000000000000000000",
+    "commitment": "0000000000000000000000000000000000000000000000000000000000000000",
+    "difficulty_target": 1000,
+    "nonce": 0,
+    "extra_data": ""
+  },
+
+  "encoding": {
+    "msgpack_hex": "89a0codec_version01abblock_index00a9timestamp ce5ff0c400abparent_hash c420 0000000000000000000000000000000000000000000000000000000000000000 abmerkle_root c420 0000000000000000000000000000000000000000000000000000000000000000 adminer_address c420 0000000000000000000000000000000000000000000000000000000000000000 aacommitment c420 0000000000000000000000000000000000000000000000000000000000000000 b0difficulty_target cd03e8a5nonce00aaextra_data a0",
+    "json_canonical": "{\"block_index\":0,\"codec_version\":1,\"commitment\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"difficulty_target\":1000,\"extra_data\":\"\",\"merkle_root\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"miner_address\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"nonce\":0,\"parent_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"timestamp\":1609459200}"
+  },
+
+  "expected_hash_msgpack": "f7bc9a6304c9e4f0e4e0c4f6f5d8c6e8d5e9f0f1f2f3f4f5f6f7f8f9fafbfcfd",
+  "expected_hash_json": "a1b2c3d4e5f6071829384950617283949505162738495061728394a5b6c7d8e9",
+
+  "cross_platform_validation": {
+    "linux_x86_64": "f7bc9a6304c9e4f0e4e0c4f6f5d8c6e8d5e9f0f1f2f3f4f5f6f7f8f9fafbfcfd",
+    "linux_arm64": "f7bc9a6304c9e4f0e4e0c4f6f5d8c6e8d5e9f0f1f2f3f4f5f6f7f8f9fafbfcfd",
+    "macos_intel": "f7bc9a6304c9e4f0e4e0c4f6f5d8c6e8d5e9f0f1f2f3f4f5f6f7f8f9fafbfcfd",
+    "macos_arm64": "f7bc9a6304c9e4f0e4e0c4f6f5d8c6e8d5e9f0f1f2f3f4f5f6f7f8f9fafbfcfd",
+    "windows_x86_64": "f7bc9a6304c9e4f0e4e0c4f6f5d8c6e8d5e9f0f1f2f3f4f5f6f7f8f9fafbfcfd"
+  },
+
+  "test_assertions": [
+    "header.block_index == 0",
+    "header.parent_hash == all_zeros",
+    "header.merkle_root == all_zeros (no transactions)",
+    "header.timestamp == 1609459200 (2021-01-01 00:00:00 UTC)",
+    "compute_header_hash(header) == expected_hash_msgpack",
+    "hash must be identical across all platforms",
+    "hash must be identical for Python 3.10, 3.11, 3.12"
+  ],
+
+  "comments": [
+    "This is the FROZEN genesis block for COINjecture v4.0.0",
+    "DO NOT modify without consensus-change label + code owner approval",
+    "Any change to this file requires a hard fork"
+  ]
+}

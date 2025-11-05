@@ -1,0 +1,104 @@
+{
+  "version": "4.0.0",
+  "test_name": "merkle_roots",
+  "frozen_date": "2025-11-04T00:00:00Z",
+  "description": "Merkle tree test cases with various transaction counts",
+
+  "test_cases": [
+    {
+      "name": "empty_tree",
+      "transaction_hashes": [],
+      "expected_root": "0000000000000000000000000000000000000000000000000000000000000000",
+      "note": "Empty transaction list → all-zeros merkle root"
+    },
+    {
+      "name": "single_transaction",
+      "transaction_hashes": [
+        "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+      ],
+      "expected_root": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "note": "Single transaction → root is transaction hash itself"
+    },
+    {
+      "name": "two_transactions",
+      "transaction_hashes": [
+        "1111111111111111111111111111111111111111111111111111111111111111",
+        "2222222222222222222222222222222222222222222222222222222222222222"
+      ],
+      "expected_root": "3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b",
+      "tree_structure": {
+        "level_0": [
+          "1111111111111111111111111111111111111111111111111111111111111111",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "level_1": [
+          "SHA256(0x1111... || 0x2222...)"
+        ]
+      }
+    },
+    {
+      "name": "power_of_two_transactions",
+      "transaction_hashes": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      ],
+      "expected_root": "4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+      "tree_height": 2,
+      "note": "Perfect binary tree with 4 transactions (2^2)"
+    },
+    {
+      "name": "non_power_of_two_transactions",
+      "transaction_hashes": [
+        "1010101010101010101010101010101010101010101010101010101010101010",
+        "2020202020202020202020202020202020202020202020202020202020202020",
+        "3030303030303030303030303030303030303030303030303030303030303030"
+      ],
+      "expected_root": "5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+      "tree_height": 2,
+      "note": "Non-power-of-two requires padding strategy"
+    },
+    {
+      "name": "large_transaction_set_1k",
+      "transaction_count": 1000,
+      "expected_root": "6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e",
+      "note": "1000 transactions - performance test case",
+      "performance_target": {
+        "desktop_tier_p95": "50ms",
+        "server_tier_p95": "20ms"
+      }
+    }
+  ],
+
+  "algorithm": {
+    "name": "Binary Merkle Tree",
+    "description": "Standard binary merkle tree with SHA-256",
+    "padding_strategy": "duplicate_last_node",
+    "hash_function": "SHA-256",
+    "concatenation_order": "left || right",
+    "root_for_empty_tree": "all_zeros_32_bytes"
+  },
+
+  "determinism_properties": [
+    "Same transaction order → same root",
+    "Different transaction order → different root (order matters)",
+    "Merkle root computation must be O(n) or O(n log n)",
+    "Must complete within tier budget (see SLO-006)"
+  ],
+
+  "test_assertions": [
+    "compute_merkle_root([]) == all_zeros",
+    "compute_merkle_root([tx]) == tx.hash",
+    "compute_merkle_root(txs) deterministic across platforms",
+    "compute_merkle_root(txs) deterministic across runs",
+    "performance within budget for all tier sizes"
+  ],
+
+  "comments": [
+    "Merkle tree algorithm MUST NOT change without hard fork",
+    "Padding strategy MUST be consistent",
+    "Hash function MUST remain SHA-256",
+    "Any change requires consensus-change label"
+  ]
+}

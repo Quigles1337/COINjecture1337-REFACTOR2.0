@@ -1,0 +1,132 @@
+# Code Owners for COINjecture v4.0.0
+#
+# These owners will be automatically requested for review when someone
+# opens a pull request that modifies the specified files.
+#
+# CRITICAL: Golden vectors and consensus code require strict approval.
+
+# ==============================================================================
+# GOLDEN TEST VECTORS (CONSENSUS CRITICAL)
+# ==============================================================================
+# Golden vectors are FROZEN. Any change = consensus breaking change = hard fork.
+# Requires:
+#   1. PR labeled with "golden-vector-change" or "consensus-change"
+#   2. Code owner approval (@Quigles1337)
+#   3. At least 2 additional maintainer approvals
+#   4. Security team sign-off
+#   5. Migration guide for existing nodes
+
+/rust/coinjecture-core/golden/                          @Quigles1337
+/rust/coinjecture-core/golden/*.json                    @Quigles1337
+/rust/coinjecture-core/golden/README.md                 @Quigles1337
+
+# Golden test infrastructure
+/rust/coinjecture-core/tests/golden_tests.rs            @Quigles1337
+/python/tests/golden/                                   @Quigles1337
+
+# ==============================================================================
+# CONSENSUS-CRITICAL CODE
+# ==============================================================================
+# Changes to these files affect consensus and require careful review.
+
+# Rust consensus core
+/rust/coinjecture-core/src/types.rs                     @Quigles1337
+/rust/coinjecture-core/src/codec.rs                     @Quigles1337
+/rust/coinjecture-core/src/hash.rs                      @Quigles1337
+/rust/coinjecture-core/src/merkle.rs                    @Quigles1337
+/rust/coinjecture-core/src/commitment.rs                @Quigles1337
+/rust/coinjecture-core/src/verify.rs                    @Quigles1337
+
+# Python consensus layer
+/python/src/coinjecture/types.py                        @Quigles1337
+/python/src/coinjecture/consensus/codec.py              @Quigles1337
+/python/src/coinjecture/consensus/admission.py          @Quigles1337
+/python/src/coinjecture/legacy_compat.py                @Quigles1337
+
+# ==============================================================================
+# CI/CD WORKFLOWS (QUALITY GATES)
+# ==============================================================================
+# Changes to CI affect quality gates and must be reviewed carefully.
+
+/.github/workflows/ci.yml                               @Quigles1337
+/.github/workflows/determinism.yml                      @Quigles1337
+/.github/workflows/parity.yml                           @Quigles1337
+/.github/workflows/security.yml                         @Quigles1337
+
+# ==============================================================================
+# SECURITY-CRITICAL CODE
+# ==============================================================================
+# Security-sensitive code requires security team review.
+
+# Epoch replay protection (SEC-002)
+/python/src/coinjecture/consensus/admission.py          @Quigles1337
+/rust/coinjecture-core/src/commitment.rs                @Quigles1337
+
+# IPFS pin quorum (SEC-005)
+/go/pkg/ipfs/pinning_quorum.go                          @Quigles1337
+
+# Rate limiting
+/go/pkg/limiter/rate_limiter.go                         @Quigles1337
+
+# ==============================================================================
+# ARCHITECTURE & DOCUMENTATION
+# ==============================================================================
+# Major architectural documents require review to maintain consistency.
+
+/REFACTOR_ARCHITECTURE.md                               @Quigles1337
+/docs/RUNBOOKS.md                                       @Quigles1337
+/docs/SLO.md                                            @Quigles1337
+/docs/RELEASE_POLICY.md                                 @Quigles1337
+
+# ==============================================================================
+# BUILD & DEPENDENCY MANAGEMENT
+# ==============================================================================
+# Dependency changes require security review (supply chain risk).
+
+/rust/coinjecture-core/Cargo.toml                       @Quigles1337
+/rust/coinjecture-core/Cargo.lock                       @Quigles1337
+/python/pyproject.toml                                  @Quigles1337
+/python/requirements.txt                                @Quigles1337
+/go/go.mod                                              @Quigles1337
+/go/go.sum                                              @Quigles1337
+
+# ==============================================================================
+# RELEASE ARTIFACTS
+# ==============================================================================
+# Release-related files require release manager approval.
+
+/.github/workflows/release.yml                          @Quigles1337
+/scripts/release/                                       @Quigles1337
+/CHANGELOG.md                                           @Quigles1337
+
+# ==============================================================================
+# DEFAULT OWNERS
+# ==============================================================================
+# Default owner for everything not explicitly specified above.
+
+*                                                       @Quigles1337
+
+# ==============================================================================
+# NOTES
+# ==============================================================================
+#
+# Pull Request Labels Required for Sensitive Changes:
+# - `golden-vector-change`: Any modification to golden vectors
+# - `consensus-change`: Any change affecting consensus logic
+# - `security-review`: Changes to security-critical code
+# - `breaking-change`: API or protocol breaking changes
+#
+# Approval Process for Golden Vectors:
+# 1. Create issue explaining why consensus is changing
+# 2. Create PR with "golden-vector-change" label
+# 3. Get code owner approval (@Quigles1337)
+# 4. Get 2+ additional maintainer approvals
+# 5. Security team sign-off
+# 6. Update CHANGELOG.md with migration instructions
+# 7. Increment version (golden vectors are versioned)
+#
+# Emergency Hotfixes:
+# - Security vulnerabilities: Can bypass some reviews with incident commander approval
+# - Must still get code owner approval for consensus-critical changes
+# - Post-incident review required within 48 hours
+#
