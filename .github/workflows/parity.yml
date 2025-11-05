@@ -1,4 +1,4 @@
-name: Parity - Legacy vs Refactored Validation
+name: Parity - Consensus Change Gate & Legacy Validation
 
 on:
   push:
@@ -11,8 +11,92 @@ on:
 
 env:
   CODEC_MODE: shadow  # Log drifts but don't reject
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
 
 jobs:
+  # ==================== GATE 1: CONSENSUS CHANGE LABEL ====================
+  # If PR touches consensus-critical paths, require label + approval
+
+  check-consensus-gate:
+    name: Check Consensus Change Gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if PR modifies consensus-critical paths
+        id: check_paths
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const consensusPaths = [
+              'rust/coinjecture-core/src/codec.rs',
+              'rust/coinjecture-core/src/types.rs',
+              'rust/coinjecture-core/src/hash.rs',
+              'rust/coinjecture-core/src/merkle.rs',
+              'rust/coinjecture-core/src/commitment.rs',
+              'rust/coinjecture-core/src/verify.rs',
+              'rust/coinjecture-core/golden/',
+              'python/src/coinjecture/consensus/'
+            ];
+
+            const files = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            const touchesConsensus = files.data.some(file =>
+              consensusPaths.some(path => file.filename.includes(path))
+            );
+
+            if (touchesConsensus) {
+              const labels = context.payload.pull_request.labels.map(l => l.name);
+              const hasLabel = labels.includes('consensus-change');
+
+              if (!hasLabel) {
+                core.setFailed(
+                  '❌ CONSENSUS-CRITICAL PATH MODIFIED\\n\\n' +
+                  'This PR modifies consensus-critical code but lacks the "consensus-change" label.\\n\\n' +
+                  '**Required Steps:**\\n' +
+                  '1. Add label: `consensus-change`\\n' +
+                  '2. Obtain code owner approval (@Quigles1337)\\n' +
+                  '3. Ensure parity tests pass (old_hash == new_hash)\\n\\n' +
+                  '**Modified paths:**\\n' +
+                  files.data.map(f => `- ${f.filename}`).join('\\n')
+                );
+                return false;
+              }
+
+              // Check code owner approval
+              const reviews = await github.rest.pulls.listReviews({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number
+              });
+
+              const hasApproval = reviews.data.some(review =>
+                review.user.login === 'Quigles1337' && review.state === 'APPROVED'
+              );
+
+              if (!hasApproval) {
+                core.setFailed(
+                  '❌ CODE OWNER APPROVAL REQUIRED\\n\\n' +
+                  'This PR modifies consensus-critical code and requires @Quigles1337 approval.'
+                );
+                return false;
+              }
+
+              core.info('✅ Consensus change gate passed (label + approval)');
+            } else {
+              core.info('✅ No consensus-critical paths modified');
+            }
+
+            return true;
+
+  # ==================== DUAL-RUN PARITY TESTS ====================
+
   parity-dual-run:
     name: Dual-Run Parity Test (N=${{ matrix.blocks }} blocks)
     runs-on: ubuntu-latest
@@ -77,10 +161,98 @@ jobs:
           fi
           echo "✅ 100% parity achieved!"
 
+  # ==================== GOLDEN HASH COMPARISON ====================
+  # Compare golden test hashes between base branch and PR branch
+
+  golden-hash-parity:
+    name: Golden Hash Parity Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Build and test PR branch
+        run: |
+          cd rust/coinjecture-core
+          cargo build --release
+          cargo test --release --test golden_tests -- --nocapture 2>&1 | tee ../../pr_golden_output.txt
+
+      - name: Switch to base branch
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git checkout origin/${{ github.base_ref }}
+
+      - name: Build and test base branch
+        run: |
+          cd rust/coinjecture-core
+          cargo build --release
+          cargo test --release --test golden_tests -- --nocapture 2>&1 | tee ../../base_golden_output.txt
+
+      - name: Compare golden hashes
+        id: compare_golden
+        run: |
+          echo "## Golden Hash Comparison" > golden_comparison.md
+          echo "" >> golden_comparison.md
+          echo "**Base:** origin/${{ github.base_ref }}" >> golden_comparison.md
+          echo "**PR:** ${{ github.head_ref }}" >> golden_comparison.md
+          echo "" >> golden_comparison.md
+
+          if diff -u base_golden_output.txt pr_golden_output.txt > golden_diff.txt 2>&1; then
+            echo "✅ **GOLDEN HASHES MATCH** - No drift detected" >> golden_comparison.md
+            echo "golden_status=pass" >> $GITHUB_OUTPUT
+          else
+            echo "❌ **GOLDEN HASH DRIFT DETECTED**" >> golden_comparison.md
+            echo "" >> golden_comparison.md
+            echo "```diff" >> golden_comparison.md
+            head -100 golden_diff.txt >> golden_comparison.md
+            echo "```" >> golden_comparison.md
+            echo "golden_status=fail" >> $GITHUB_OUTPUT
+          fi
+
+          cat golden_comparison.md
+
+      - name: Upload golden comparison
+        uses: actions/upload-artifact@v3
+        with:
+          name: golden-comparison
+          path: golden_comparison.md
+
+      - name: Comment golden comparison on PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('golden_comparison.md', 'utf8');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: report
+            });
+
+      - name: Fail if golden hash drift
+        if: steps.compare_golden.outputs.golden_status == 'fail'
+        run: |
+          echo "❌ GOLDEN HASH DRIFT - Consensus change detected"
+          echo "This requires consensus-change label and code owner approval"
+          exit 1
+
+  # ==================== PARITY REPORT ====================
+
   parity-report:
     name: Generate Parity Report
     runs-on: ubuntu-latest
-    needs: parity-dual-run
+    needs: [check-consensus-gate, parity-dual-run, golden-hash-parity]
     if: always()
     steps:
       - uses: actions/checkout@v4

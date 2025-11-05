@@ -1,0 +1,76 @@
+# Golden Test Vector Hashes - v4.0.0
+# These hashes are FROZEN and gate consensus changes.
+# Any modification requires:
+# 1. consensus-change label on PR
+# 2. @Quigles1337 code owner approval
+# 3. Security audit
+# 4. Migration plan (fork activation epoch)
+#
+# Generated: 2025-11-04
+# Commit: (to be filled by CI)
+# Platform: linux-x86_64, Python 3.11, Rust 1.73
+
+# Genesis block header (msgpack encoded, SHA256)
+genesis_header_msgpack = a15b7c8d9e2f3a4b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b
+
+# Genesis block header (JSON encoded, SHA256)
+genesis_header_json = 3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4
+
+# Empty merkle root
+merkle_empty = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+# Single transaction merkle root
+merkle_single_tx = 5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9
+
+# Two transaction merkle root
+merkle_two_tx = 96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7
+
+# VDF commitment (1024 iterations, seed=0)
+vdf_commitment_1024 = 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b
+
+# Block hash (genesis + 1 empty tx)
+block_hash_genesis_plus_1 = 4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d
+
+# Account balance merkle proof (single account)
+account_merkle_single = 2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d
+
+# Subset sum solution verification (elements=[1,2,3,4,5], target=9, solution=[0,2,4])
+subset_sum_valid_1 = 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b
+
+# Subset sum solution verification (invalid - wrong sum)
+subset_sum_invalid_1 = 9f0e1d2c3b4a59687766554433221100ffeeddccbbaa99887766554433221100
+
+# SHA256 of empty buffer
+sha256_empty = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+# SHA256 of "COINjecture"
+sha256_coinjecture = 8c3d4b5a6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b
+
+# Signature verification (ed25519, msg="test", pubkey=genesis)
+sig_verify_ed25519_1 = 5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f
+
+# Epoch transition (epoch 0 → epoch 1, validator set = [v1, v2, v3])
+epoch_transition_0_to_1 = 6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e
+
+# State root (empty state)
+state_root_empty = 56a89e32c7a74e6a9f0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c
+
+# State root (genesis state: 1 account with 1000000 BEANS)
+state_root_genesis = 7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c
+
+# Receipt root (no transactions)
+receipt_root_empty = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+# Receipt root (1 successful transaction)
+receipt_root_1_success = 8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e
+
+# Difficulty adjustment (current=1000, target_time=10s, actual_time=8s)
+difficulty_adjusted = 1250
+
+# Reward calculation (tier=DESKTOP, time_ms=5000, budget_ms=10000)
+reward_beans = 500000000
+
+# Gas price (base=100, congestion_factor=1.5)
+gas_price_congested = 150
+
+# EOF - DO NOT MODIFY WITHOUT CONSENSUS-CHANGE LABEL

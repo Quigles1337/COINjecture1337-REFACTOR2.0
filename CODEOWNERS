@@ -1,0 +1,97 @@
+# COINjecture REFACTOR - Code Owners
+#
+# This file defines ownership and review requirements for consensus-critical code.
+# Changes to protected paths REQUIRE approval from designated code owners.
+#
+# Syntax: <path pattern> @owner1 @owner2
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ==================== CONSENSUS-CRITICAL PATHS ====================
+# These paths gate blockchain consensus and MUST NOT change without:
+# 1. Code owner approval
+# 2. PR label: "consensus-change"
+# 3. Passing parity tests (old hash == new hash)
+# 4. Security audit (for major changes)
+
+# Golden test vectors (frozen fixtures for determinism)
+/rust/coinjecture-core/golden/**                @Quigles1337
+
+# Core Rust codec (msgpack serialization/deserialization)
+/rust/coinjecture-core/src/codec.rs             @Quigles1337
+/rust/coinjecture-core/src/types.rs             @Quigles1337
+/rust/coinjecture-core/src/hash.rs              @Quigles1337
+/rust/coinjecture-core/src/merkle.rs            @Quigles1337
+
+# Commitment scheme (VDF/PoW/timelock verification)
+/rust/coinjecture-core/src/commitment.rs        @Quigles1337
+/rust/coinjecture-core/src/verify.rs            @Quigles1337
+
+# Python consensus fallback
+/python/src/coinjecture/consensus/codec.py      @Quigles1337
+/python/src/coinjecture/consensus/admission.py  @Quigles1337
+
+# ==================== SECURITY-SENSITIVE PATHS ====================
+
+# Rate limiting and DoS defense
+/go/pkg/limiter/**                              @Quigles1337
+
+# Cryptographic primitives
+/rust/coinjecture-core/src/crypto.rs            @Quigles1337
+
+# CI/CD security pipeline
+/.github/workflows/security.yml                 @Quigles1337
+/.github/workflows/parity.yml                   @Quigles1337
+/.github/workflows/determinism.yml              @Quigles1337
+
+# ==================== BUILD & RELEASE ====================
+
+# Dependency manifests (supply chain integrity)
+/rust/coinjecture-core/Cargo.toml               @Quigles1337
+/rust/coinjecture-core/Cargo.lock               @Quigles1337
+/go/go.mod                                      @Quigles1337
+/go/go.sum                                      @Quigles1337
+/python/requirements.txt                        @Quigles1337
+/python/setup.py                                @Quigles1337
+
+# Release workflows
+/.github/workflows/release.yml                  @Quigles1337
+
+# ==================== DOCUMENTATION ====================
+
+# Architecture and refactor plan
+/REFACTOR_ARCHITECTURE.md                       @Quigles1337
+/REFACTOR_PLAN.md                               @Quigles1337
+/docs/CUTOVER_RUNBOOK.md                        @Quigles1337
+/docs/ARTIFACT_VERIFICATION.md                  @Quigles1337
+
+# ==================== REVIEW POLICY ====================
+#
+# Consensus-Critical Changes:
+#   - Require PR label: "consensus-change"
+#   - Require code owner approval
+#   - Must pass parity tests (determinism.yml)
+#   - Must pass golden vector tests
+#   - Recommended: security audit for major changes
+#
+# Security-Sensitive Changes:
+#   - Require code owner approval
+#   - Must pass security.yml workflow
+#   - Must include threat model updates
+#
+# Dependency Updates:
+#   - Require code owner approval
+#   - Must pass cargo audit / pip-audit / govulncheck
+#   - Must update SBOMs
+#
+# Emergency Hotfixes:
+#   - Can bypass approval IF:
+#     - Incident commander approval
+#     - Post-merge review within 24h
+#     - Post-mortem within 48h
+#
+# ==================== ESCALATION ====================
+#
+# Primary Code Owner:  @Quigles1337 (adz@alphx.io)
+# Incident Commander:  @Quigles1337
+# Security Team:       security@example.com
+# SRE On-Call:         sre-oncall@example.com
