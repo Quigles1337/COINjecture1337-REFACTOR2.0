@@ -32,6 +32,9 @@ type Engine struct {
 	blockHeight  uint64
 	chainLock    sync.RWMutex
 
+	// Fork choice and chain reorganization
+	forkChoice *ForkChoice
+
 	// Block production
 	blockTimer *time.Ticker
 	ctx        context.Context
@@ -39,6 +42,7 @@ type Engine struct {
 
 	// Callbacks
 	onNewBlock func(*Block) // Called when a new block is produced
+	onReorg    func(oldTip *Block, newTip *Block, reorgDepth int) // Called on chain reorg
 }
 
 // NewEngine creates a new PoA consensus engine
@@ -110,6 +114,9 @@ func (e *Engine) initializeGenesis() error {
 	e.chainLock.Lock()
 	e.currentBlock = genesis
 	e.blockHeight = 0
+
+	// Initialize fork choice with genesis
+	e.forkChoice = NewForkChoice(genesis, e.log)
 	e.chainLock.Unlock()
 
 	e.log.WithFields(logger.Fields{
@@ -179,6 +186,14 @@ func (e *Engine) produceBlock() error {
 	block.StateRoot = stateRoot
 	block.Finalize() // Recompute hash with new state root
 
+	// Add to fork choice
+	if e.forkChoice != nil {
+		_, err := e.forkChoice.AddBlock(block)
+		if err != nil {
+			e.log.WithError(err).Warn("Failed to add produced block to fork choice")
+		}
+	}
+
 	// Update chain state
 	e.currentBlock = block
 	e.blockHeight++
@@ -197,7 +212,6 @@ func (e *Engine) produceBlock() error {
 	}
 
 	// TODO: Save block to database
-	// TODO: Broadcast block to P2P network
 
 	return nil
 }
@@ -237,41 +251,63 @@ func (e *Engine) ProcessBlock(block *Block) error {
 		return fmt.Errorf("unauthorized validator")
 	}
 
-	// Check if block extends current chain
-	if block.BlockNumber != e.blockHeight+1 {
-		e.log.WithFields(logger.Fields{
-			"expected": e.blockHeight + 1,
-			"got":      block.BlockNumber,
-		}).Warn("Block number mismatch")
-		return fmt.Errorf("block number mismatch")
-	}
-
-	if e.currentBlock != nil && block.ParentHash != e.currentBlock.BlockHash {
-		e.log.Warn("Block parent hash mismatch")
-		return fmt.Errorf("parent hash mismatch")
-	}
-
-	// Apply block to state
-	stateRoot, err := e.builder.ApplyBlock(block)
+	// Add block to fork choice
+	shouldReorg, err := e.forkChoice.AddBlock(block)
 	if err != nil {
-		return fmt.Errorf("failed to apply block: %w", err)
+		return fmt.Errorf("fork choice rejected block: %w", err)
 	}
 
-	// Verify state root
-	if stateRoot != block.StateRoot {
-		return fmt.Errorf("state root mismatch")
+	// If fork choice says we should reorganize, do it
+	if shouldReorg {
+		oldTip := e.currentBlock
+		if err := e.handleChainReorganization(oldTip, block); err != nil {
+			return fmt.Errorf("chain reorganization failed: %w", err)
+		}
+	} else {
+		e.log.WithFields(logger.Fields{
+			"block_number": block.BlockNumber,
+			"block_hash":   fmt.Sprintf("%x", block.BlockHash[:8]),
+		}).Debug("Block accepted but not canonical (fork)")
 	}
 
-	// Accept block
-	e.currentBlock = block
-	e.blockHeight++
+	return nil
+}
+
+// handleChainReorganization handles switching to a new canonical chain
+func (e *Engine) handleChainReorganization(oldTip *Block, newTip *Block) error {
+	e.log.WithFields(logger.Fields{
+		"old_height": oldTip.BlockNumber,
+		"old_hash":   fmt.Sprintf("%x", oldTip.BlockHash[:8]),
+		"new_height": newTip.BlockNumber,
+		"new_hash":   fmt.Sprintf("%x", newTip.BlockHash[:8]),
+	}).Warn("Chain reorganization triggered")
+
+	// For now, simple approach: if new chain is longer, accept it
+	// TODO: Implement full state rollback and reapply
+	// This requires:
+	// 1. Find common ancestor
+	// 2. Rollback state to ancestor
+	// 3. Replay blocks from new chain
+
+	// Update current block and height
+	e.currentBlock = newTip
+	e.blockHeight = newTip.BlockNumber
+
+	reorgDepth := int(oldTip.BlockNumber) - int(newTip.BlockNumber)
+	if reorgDepth < 0 {
+		reorgDepth = -reorgDepth
+	}
+
+	// Trigger reorg callback if set
+	if e.onReorg != nil {
+		go e.onReorg(oldTip, newTip, reorgDepth)
+	}
 
 	e.log.WithFields(logger.Fields{
-		"block_number": block.BlockNumber,
-		"block_hash":   fmt.Sprintf("%x", block.BlockHash[:8]),
-	}).Info("Block accepted and applied")
-
-	// TODO: Save block to database
+		"new_height": newTip.BlockNumber,
+		"new_hash":   fmt.Sprintf("%x", newTip.BlockHash[:8]),
+		"reorg_depth": reorgDepth,
+	}).Info("Chain reorganization complete")
 
 	return nil
 }
