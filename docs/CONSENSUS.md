@@ -380,8 +380,8 @@ graph TD
         I5[H4567 = SHA256<br/>H45 + H67]
     end
 
-    subgraph "Root"
-        Root[Merkle Root<br/>SHA256 H0123 + H4567]
+    subgraph "Root Level"
+        MerkleRoot[Merkle Root<br/>SHA256 H0123 + H4567]
     end
 
     L0 --> I0
@@ -398,10 +398,10 @@ graph TD
     I2 --> I5
     I3 --> I5
 
-    I4 --> Root
-    I5 --> Root
+    I4 --> MerkleRoot
+    I5 --> MerkleRoot
 
-    style Root fill:#ff6b6b
+    style MerkleRoot fill:#ff6b6b
     style I4 fill:#4ecdc4
     style I5 fill:#4ecdc4
 ```
