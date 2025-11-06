@@ -35,6 +35,9 @@ type Engine struct {
 	// Fork choice and chain reorganization
 	forkChoice *ForkChoice
 
+	// Validator slashing
+	slashing *SlashingManager
+
 	// Block production
 	blockTimer *time.Ticker
 	ctx        context.Context
@@ -56,11 +59,21 @@ func NewEngine(
 
 	builder := NewBlockBuilder(mp, sm, log)
 
+	// Create slashing manager with default config
+	slashingCfg := DefaultSlashingConfig()
+	slashing := NewSlashingManager(slashingCfg, log)
+
+	// Register all validators for slashing tracking
+	for _, validator := range cfg.Validators {
+		slashing.RegisterValidator(validator)
+	}
+
 	return &Engine{
 		config:       cfg,
 		builder:      builder,
 		stateManager: sm,
 		log:          log,
+		slashing:     slashing,
 		blockHeight:  0,
 		ctx:          ctx,
 		cancel:       cancel,
@@ -198,6 +211,11 @@ func (e *Engine) produceBlock() error {
 	e.currentBlock = block
 	e.blockHeight++
 
+	// Record successful block production (improves reputation)
+	if e.slashing != nil {
+		e.slashing.RecordBlockProduced(e.config.ValidatorKey)
+	}
+
 	e.log.WithFields(logger.Fields{
 		"block_number": block.BlockNumber,
 		"block_hash":   fmt.Sprintf("%x", block.BlockHash[:8]),
@@ -241,14 +259,29 @@ func (e *Engine) ProcessBlock(block *Block) error {
 		"validator":    fmt.Sprintf("%x", block.Validator[:8]),
 	}).Info("Processing received block")
 
+	// Check if validator is slashed/jailed
+	if e.slashing != nil && !e.slashing.IsValidatorActive(block.Validator) {
+		e.log.WithField("validator", fmt.Sprintf("%x", block.Validator[:8])).Warn("Block from slashed/jailed validator rejected")
+		return fmt.Errorf("validator is slashed or jailed")
+	}
+
 	// Validate block
 	if !block.IsValid() {
+		// Slash validator for producing invalid block
+		if e.slashing != nil {
+			e.slashing.Slash(block.Validator, OffenseInvalidBlock, block.BlockNumber, nil)
+		}
 		return fmt.Errorf("invalid block")
 	}
 
 	// Check if validator is authorized
 	if !e.isAuthorizedValidator(block.Validator) {
 		return fmt.Errorf("unauthorized validator")
+	}
+
+	// Record successful block from this validator
+	if e.slashing != nil {
+		e.slashing.RecordBlockProduced(block.Validator)
 	}
 
 	// Add block to fork choice
