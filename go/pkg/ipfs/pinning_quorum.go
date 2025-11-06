@@ -110,7 +110,7 @@ func (c *IPFSClient) PinWithQuorum(ctx context.Context, content io.Reader) (*Pin
 			defer wg.Done()
 
 			// Create context with timeout
-			pinCtx, cancel := context.WithTimeout(ctx, c.config.PinTimeout)
+			_, cancel := context.WithTimeout(ctx, c.config.PinTimeout)
 			defer cancel()
 
 			// Add content to IPFS

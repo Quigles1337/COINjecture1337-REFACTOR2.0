@@ -25,8 +25,10 @@ import (
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/config"
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/ipfs"
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/limiter"
+	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/mempool"
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/metrics"
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/p2p"
+	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/state"
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/internal/logger"
 
 	"github.com/spf13/cobra"
@@ -107,15 +109,33 @@ func runDaemon(cmd *cobra.Command, args []string) {
 	rateLimiter := limiter.NewRateLimiter(cfg.RateLimiter, log)
 	log.Info("Rate limiter initialized")
 
-	// 3. IPFS client with pinning quorum
+	// 3. Mempool for transaction management
+	mempoolCfg := mempool.Config{
+		MaxSize:           10000,
+		MaxTxAge:          1 * time.Hour,
+		CleanupInterval:   5 * time.Minute,
+		PriorityThreshold: 0,
+	}
+	mp := mempool.NewMempool(mempoolCfg, log)
+	log.Info("Mempool initialized")
+
+	// 4. State manager (SQLite)
+	stateManager, err := state.NewStateManager("coinjecture.db", log)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to initialize state manager")
+	}
+	defer stateManager.Close()
+	log.Info("State manager initialized")
+
+	// 5. IPFS client with pinning quorum
 	ipfsClient, err := ipfs.NewIPFSClient(cfg.IPFS, log)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to initialize IPFS client")
 	}
 	log.WithField("quorum", cfg.IPFS.PinQuorum).Info("IPFS client initialized")
 
-	// 4. P2P network manager
-	p2pManager, err := p2p.NewManager(cfg.P2P, log)
+	// 6. P2P network manager
+	p2pManager, err := p2p.NewManager(ctx, cfg.P2P, mp, stateManager, log)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to initialize P2P manager")
 	}
@@ -125,8 +145,8 @@ func runDaemon(cmd *cobra.Command, args []string) {
 	defer p2pManager.Stop()
 	log.Info("P2P network started")
 
-	// 5. API server
-	apiServer := api.NewServer(cfg.API, rateLimiter, ipfsClient, p2pManager, log)
+	// 7. API server
+	apiServer := api.NewServer(cfg.API, rateLimiter, ipfsClient, p2pManager, mp, stateManager, log)
 	go func() {
 		log.WithField("port", cfg.API.Port).Info("Starting API server")
 		if err := apiServer.Start(); err != nil && err != http.ErrServerClosed {

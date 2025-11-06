@@ -12,7 +12,9 @@ import (
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/config"
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/ipfs"
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/limiter"
+	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/mempool"
 	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/p2p"
+	"github.com/Quigles1337/COINjecture1337-REFACTOR/go/pkg/state"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -65,13 +67,16 @@ var (
 
 // Server is the REST API server
 type Server struct {
-	config      config.APIConfig
-	log         *logger.Logger
-	limiter     *limiter.RateLimiter
-	ipfsClient  *ipfs.IPFSClient
-	p2pManager  *p2p.Manager
-	router      *gin.Engine
-	httpServer  *http.Server
+	config       config.APIConfig
+	log          *logger.Logger
+	limiter      *limiter.RateLimiter
+	ipfsClient   *ipfs.IPFSClient
+	p2pManager   *p2p.Manager
+	mempool      *mempool.Mempool
+	stateManager *state.StateManager
+	wsHub        *WSHub
+	router       *gin.Engine
+	httpServer   *http.Server
 }
 
 // NewServer creates a new API server
@@ -80,6 +85,8 @@ func NewServer(
 	rateLimiter *limiter.RateLimiter,
 	ipfsClient *ipfs.IPFSClient,
 	p2pManager *p2p.Manager,
+	mp *mempool.Mempool,
+	sm *state.StateManager,
 	log *logger.Logger,
 ) *Server {
 	// Set Gin mode
@@ -88,13 +95,20 @@ func NewServer(
 	router := gin.New()
 	router.Use(gin.Recovery())
 
+	// Create WebSocket hub
+	wsHub := NewWSHub(log)
+	go wsHub.Run()
+
 	s := &Server{
-		config:     cfg,
-		log:        log,
-		limiter:    rateLimiter,
-		ipfsClient: ipfsClient,
-		p2pManager: p2pManager,
-		router:     router,
+		config:       cfg,
+		log:          log,
+		limiter:      rateLimiter,
+		ipfsClient:   ipfsClient,
+		p2pManager:   p2pManager,
+		mempool:      mp,
+		stateManager: sm,
+		wsHub:        wsHub,
+		router:       router,
 	}
 
 	s.setupRoutes()
@@ -117,13 +131,37 @@ func (s *Server) setupRoutes() {
 	// Prometheus metrics endpoint
 	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
+	// WebSocket endpoint for real-time updates
+	s.router.GET("/ws", s.handleWebSocket)
+
 	// API v1
 	v1 := s.router.Group("/v1")
 	{
+		// Legacy proof submission
 		v1.POST("/submit_proof", s.handleSubmitProof)
-		v1.GET("/block/:hash", s.handleGetBlock)
-		v1.GET("/block/latest", s.handleGetLatestBlock)
+
+		// Transaction endpoints
+		v1.POST("/transactions", s.handleSubmitTransaction)
+		v1.GET("/transactions/:hash", s.handleGetTransaction)
+		v1.GET("/mempool/stats", s.handleMempoolStats)
+
+		// Account endpoints
+		v1.GET("/accounts/:address", s.handleGetAccount)
+		v1.GET("/accounts/:address/nonce", s.handleGetAccountNonce)
+
+		// Escrow endpoints
+		v1.POST("/escrows", s.handleCreateEscrow)
+		v1.GET("/escrows/:id", s.handleGetEscrow)
+
+		// Block endpoints
+		v1.GET("/blocks/latest", s.handleGetLatestBlock)
+		v1.GET("/blocks/number/:number", s.handleGetBlockByNumber)
+		v1.GET("/blocks/:hash", s.handleGetBlock)
+
+		// IPFS endpoints
 		v1.GET("/ipfs/:cid", s.handleGetIPFS)
+
+		// Status/monitoring
 		v1.GET("/status", s.handleStatus)
 	}
 }
@@ -213,8 +251,15 @@ func corsMiddleware() gin.HandlerFunc {
 
 func (s *Server) handleHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "healthy",
-		"version": "4.0.0",
+		"status":  "healthy",
+		"version": "4.3.0",
+		"components": gin.H{
+			"mempool":      "ok",
+			"state":        "ok",
+			"p2p":          "ok",
+			"ipfs":         "ok",
+			"rate_limiter": "ok",
+		},
 	})
 }
 
@@ -328,23 +373,6 @@ func (s *Server) handleSubmitProof(c *gin.Context) {
 	})
 }
 
-func (s *Server) handleGetBlock(c *gin.Context) {
-	hash := c.Param("hash")
-
-	// TODO: Retrieve block from storage
-
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "not implemented yet",
-		"hash":  hash,
-	})
-}
-
-func (s *Server) handleGetLatestBlock(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "not implemented yet",
-	})
-}
-
 func (s *Server) handleGetIPFS(c *gin.Context) {
 	cid := c.Param("cid")
 
@@ -365,10 +393,11 @@ func (s *Server) handleGetIPFS(c *gin.Context) {
 
 func (s *Server) handleStatus(c *gin.Context) {
 	status := map[string]interface{}{
-		"api_version":  "4.0.0",
+		"api_version":  "4.3.0",
 		"rate_limiter": s.limiter.Stats(),
 		"ipfs_quorum":  s.ipfsClient.QuorumStatus(),
-		"p2p_peers":    s.p2pManager.PeerCount(),
+		"p2p_stats":    s.p2pManager.GetNetworkStats(),
+		"mempool_size": s.mempool.Size(),
 	}
 
 	c.JSON(http.StatusOK, status)
