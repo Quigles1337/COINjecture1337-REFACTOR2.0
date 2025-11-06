@@ -97,8 +97,14 @@ pub enum ConsensusError {
     #[error("Hash computation failed: {0}")]
     HashError(String),
 
+    #[error("Invalid signature")]
+    InvalidSignature,
+
     #[error("Invalid signature: {0}")]
     SignatureError(String),
+
+    #[error("Invalid public key")]
+    InvalidPublicKey,
 
     #[error("Invalid public key: {0}")]
     PublicKeyError(String),
@@ -163,15 +169,26 @@ pub enum ConsensusError {
     #[error("Balance overflow: address {address}")]
     BalanceOverflow { address: String },
 
-    #[error("Insufficient balance: address {address}, required {required}, available {available}")]
+    #[error("Insufficient balance: required {required} wei, available {available} wei")]
     InsufficientBalance {
-        address: String,
         required: u64,
         available: u64,
     },
 
     #[error("Nonce mismatch: expected {expected}, got {actual}")]
     NonceMismatch { expected: u64, actual: u64 },
+
+    #[error("Invalid nonce: expected {expected}, got {got}")]
+    InvalidNonce { expected: u64, got: u64 },
+
+    #[error("Fee too low: required {required} wei, provided {provided} wei")]
+    FeeTooLow { required: u64, provided: u64 },
+
+    #[error("Amount overflow when computing transaction cost")]
+    AmountOverflow,
+
+    #[error("Gas limit too low: required {required}, provided {provided}")]
+    GasLimitTooLow { required: u64, provided: u64 },
 
     #[error("State root mismatch: expected {expected}, computed {computed}")]
     StateRootMismatch { expected: String, computed: String },
@@ -226,9 +243,11 @@ impl ConsensusError {
 
             // Cryptographic errors: 5xxx
             Self::HashError(_) => "E5000",
-            Self::SignatureError(_) => "E5001",
-            Self::PublicKeyError(_) => "E5002",
-            Self::HmacError(_) => "E5003",
+            Self::InvalidSignature => "E5001",
+            Self::SignatureError(_) => "E5002",
+            Self::InvalidPublicKey => "E5003",
+            Self::PublicKeyError(_) => "E5004",
+            Self::HmacError(_) => "E5005",
 
             // Merkle errors: 6xxx
             Self::MerkleError(_) => "E6000",
@@ -251,8 +270,12 @@ impl ConsensusError {
             Self::BalanceOverflow { .. } => "E9000",
             Self::InsufficientBalance { .. } => "E9001",
             Self::NonceMismatch { .. } => "E9002",
-            Self::StateRootMismatch { .. } => "E9003",
-            Self::InflationDetected => "E9004",
+            Self::InvalidNonce { .. } => "E9003",
+            Self::FeeTooLow { .. } => "E9004",
+            Self::AmountOverflow => "E9005",
+            Self::GasLimitTooLow { .. } => "E9006",
+            Self::StateRootMismatch { .. } => "E9007",
+            Self::InflationDetected => "E9008",
 
             // General: 0xxx
             Self::InvalidInput(_) => "E0001",

@@ -46,6 +46,7 @@ quickcheck = "1.0"
 quickcheck_macros = "1.0"
 proptest = "1.4"
 pretty_assertions = "1.4"
+rand = "0.8"
 
 # Test utilities
 tempfile = "3.8"

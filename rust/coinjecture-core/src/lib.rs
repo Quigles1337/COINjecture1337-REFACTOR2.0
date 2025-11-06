@@ -44,6 +44,7 @@ pub mod commitment;
 pub mod errors;
 pub mod hash;
 pub mod merkle;
+pub mod transaction;
 pub mod types;
 pub mod verify;
 
