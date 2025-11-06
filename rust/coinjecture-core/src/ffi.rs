@@ -12,10 +12,17 @@ use std::ptr;
 use std::slice;
 
 use crate::codec::compute_header_hash;
+use crate::escrow::{
+    compute_escrow_id, validate_escrow_creation, validate_escrow_refund, validate_escrow_release,
+};
 use crate::hash::sha256;
 use crate::merkle::compute_merkle_root;
+use crate::transaction::{verify_transaction, AccountState};
+use crate::types::{
+    BlockHeader, BountyEscrow, EscrowState, HardwareTier, Problem, ProblemType, Solution,
+    Transaction, TxType, VerifyBudget,
+};
 use crate::verify::verify_solution;
-use crate::types::{BlockHeader, Problem, Solution, VerifyBudget, ProblemType, HardwareTier};
 
 /// Result codes for C FFI functions
 #[repr(C)]
@@ -69,6 +76,57 @@ pub struct VerifyBudgetFFI {
     pub max_ops: c_uint,
     pub max_duration_ms: c_uint,
     pub max_memory_bytes: c_uint,
+}
+
+/// Transaction (C-compatible)
+#[repr(C)]
+pub struct TransactionFFI {
+    pub codec_version: c_uint,
+    pub tx_type: c_uint, // 1=Transfer, 2=ProblemSubmission, 3=BountyPayment
+    pub from: [u8; 32],
+    pub to: [u8; 32],
+    pub amount: u64,
+    pub nonce: u64,
+    pub gas_limit: u64,
+    pub gas_price: u64,
+    pub signature: [u8; 64],
+    pub data: *const u8,
+    pub data_len: c_uint,
+    pub timestamp: i64,
+}
+
+/// Account state (C-compatible)
+#[repr(C)]
+pub struct AccountStateFFI {
+    pub balance: u64,
+    pub nonce: u64,
+}
+
+/// Validation result (C-compatible)
+#[repr(C)]
+pub struct ValidationResultFFI {
+    pub valid: c_int,
+    pub total_cost: u64,
+    pub gas_used: u64,
+    pub fee: u64,
+}
+
+/// Bounty escrow (C-compatible)
+#[repr(C)]
+pub struct BountyEscrowFFI {
+    pub id: [u8; 32],
+    pub submitter: [u8; 32],
+    pub amount: u64,
+    pub problem_hash: [u8; 32],
+    pub created_block: u64,
+    pub expiry_block: u64,
+    pub state: c_uint, // 0=Locked, 1=Released, 2=Refunded
+    pub has_recipient: c_int,
+    pub recipient: [u8; 32],
+    pub has_settled_block: c_int,
+    pub settled_block: u64,
+    pub has_settlement_tx: c_int,
+    pub settlement_tx: [u8; 32],
 }
 
 // ==================== Core Functions ====================
@@ -258,6 +316,248 @@ pub unsafe extern "C" fn coinjecture_verify_subset_sum(
             CoinjResult::Ok
         }
         Err(_) => CoinjResult::ErrorVerificationFailed,
+    }
+}
+
+/// Verify transaction (signature + semantics)
+///
+/// # Safety
+/// - `tx` must be valid pointer to TransactionFFI
+/// - `sender_state` must be valid pointer to AccountStateFFI
+/// - `out_result` must point to ValidationResultFFI buffer
+///
+/// # Returns
+/// - `CoinjResult::Ok` if validation succeeds (check out_result.valid for actual result)
+/// - `CoinjResult::ErrorInvalidInput` if pointers are null
+/// - `CoinjResult::ErrorVerificationFailed` if validation fails
+#[no_mangle]
+pub unsafe extern "C" fn coinjecture_verify_transaction(
+    tx: *const TransactionFFI,
+    sender_state: *const AccountStateFFI,
+    out_result: *mut ValidationResultFFI,
+) -> CoinjResult {
+    if tx.is_null() || sender_state.is_null() || out_result.is_null() {
+        return CoinjResult::ErrorInvalidInput;
+    }
+
+    let tx_ref = &*tx;
+    let state_ref = &*sender_state;
+
+    // Validate data pointer if data_len > 0
+    if tx_ref.data_len > 0 && tx_ref.data.is_null() {
+        return CoinjResult::ErrorInvalidInput;
+    }
+
+    let data = if tx_ref.data_len > 0 {
+        slice::from_raw_parts(tx_ref.data, tx_ref.data_len as usize)
+    } else {
+        &[]
+    };
+
+    // Convert tx_type
+    let tx_type = match tx_ref.tx_type {
+        1 => TxType::Transfer,
+        2 => TxType::ProblemSubmission,
+        3 => TxType::BountyPayment,
+        _ => return CoinjResult::ErrorInvalidInput,
+    };
+
+    // Convert to internal types
+    let internal_tx = Transaction {
+        codec_version: tx_ref.codec_version as u8,
+        tx_type,
+        from: tx_ref.from,
+        to: tx_ref.to,
+        amount: tx_ref.amount,
+        nonce: tx_ref.nonce,
+        gas_limit: tx_ref.gas_limit,
+        gas_price: tx_ref.gas_price,
+        signature: tx_ref.signature,
+        data: data.to_vec(),
+        timestamp: tx_ref.timestamp,
+    };
+
+    let internal_state = AccountState {
+        balance: state_ref.balance,
+        nonce: state_ref.nonce,
+    };
+
+    match verify_transaction(&internal_tx, &internal_state) {
+        Ok(result) => {
+            (*out_result).valid = if result.valid { 1 } else { 0 };
+            (*out_result).total_cost = result.total_cost;
+            (*out_result).gas_used = result.gas_used;
+            (*out_result).fee = result.fee;
+            CoinjResult::Ok
+        }
+        Err(_) => {
+            (*out_result).valid = 0;
+            CoinjResult::ErrorVerificationFailed
+        }
+    }
+}
+
+/// Compute deterministic escrow ID
+///
+/// # Safety
+/// - `submitter` must point to 32-byte array
+/// - `problem_hash` must point to 32-byte array
+/// - `out_id` must point to 32-byte buffer
+///
+/// # Returns
+/// - `CoinjResult::Ok` on success
+/// - `CoinjResult::ErrorInvalidInput` if pointers are null
+#[no_mangle]
+pub unsafe extern "C" fn coinjecture_compute_escrow_id(
+    submitter: *const [u8; 32],
+    problem_hash: *const [u8; 32],
+    created_block: u64,
+    out_id: *mut [u8; 32],
+) -> CoinjResult {
+    if submitter.is_null() || problem_hash.is_null() || out_id.is_null() {
+        return CoinjResult::ErrorInvalidInput;
+    }
+
+    let id = compute_escrow_id(&*submitter, &*problem_hash, created_block);
+    ptr::copy_nonoverlapping(id.as_ptr(), (*out_id).as_mut_ptr(), 32);
+
+    CoinjResult::Ok
+}
+
+/// Validate escrow creation parameters
+///
+/// # Safety
+/// - None (all parameters are values, not pointers)
+///
+/// # Returns
+/// - `CoinjResult::Ok` if parameters are valid
+/// - `CoinjResult::ErrorInvalidInput` if validation fails
+#[no_mangle]
+pub unsafe extern "C" fn coinjecture_validate_escrow_creation(
+    amount: u64,
+    created_block: u64,
+    expiry_block: u64,
+) -> CoinjResult {
+    match validate_escrow_creation(amount, created_block, expiry_block) {
+        Ok(_) => CoinjResult::Ok,
+        Err(_) => CoinjResult::ErrorInvalidInput,
+    }
+}
+
+/// Validate escrow release
+///
+/// # Safety
+/// - `escrow` must be valid pointer to BountyEscrowFFI
+/// - `recipient` must point to 32-byte array
+///
+/// # Returns
+/// - `CoinjResult::Ok` if release is valid
+/// - `CoinjResult::ErrorInvalidInput` if pointers are null or validation fails
+#[no_mangle]
+pub unsafe extern "C" fn coinjecture_validate_escrow_release(
+    escrow: *const BountyEscrowFFI,
+    recipient: *const [u8; 32],
+) -> CoinjResult {
+    if escrow.is_null() || recipient.is_null() {
+        return CoinjResult::ErrorInvalidInput;
+    }
+
+    let escrow_ref = &*escrow;
+
+    // Convert to internal type
+    let state = match escrow_ref.state {
+        0 => EscrowState::Locked,
+        1 => EscrowState::Released,
+        2 => EscrowState::Refunded,
+        _ => return CoinjResult::ErrorInvalidInput,
+    };
+
+    let internal_escrow = BountyEscrow {
+        id: escrow_ref.id,
+        submitter: escrow_ref.submitter,
+        amount: escrow_ref.amount,
+        problem_hash: escrow_ref.problem_hash,
+        created_block: escrow_ref.created_block,
+        expiry_block: escrow_ref.expiry_block,
+        state,
+        recipient: if escrow_ref.has_recipient != 0 {
+            Some(escrow_ref.recipient)
+        } else {
+            None
+        },
+        settled_block: if escrow_ref.has_settled_block != 0 {
+            Some(escrow_ref.settled_block)
+        } else {
+            None
+        },
+        settlement_tx: if escrow_ref.has_settlement_tx != 0 {
+            Some(escrow_ref.settlement_tx)
+        } else {
+            None
+        },
+    };
+
+    match validate_escrow_release(&internal_escrow, &*recipient) {
+        Ok(_) => CoinjResult::Ok,
+        Err(_) => CoinjResult::ErrorInvalidInput,
+    }
+}
+
+/// Validate escrow refund
+///
+/// # Safety
+/// - `escrow` must be valid pointer to BountyEscrowFFI
+///
+/// # Returns
+/// - `CoinjResult::Ok` if refund is valid
+/// - `CoinjResult::ErrorInvalidInput` if pointer is null or validation fails
+#[no_mangle]
+pub unsafe extern "C" fn coinjecture_validate_escrow_refund(
+    escrow: *const BountyEscrowFFI,
+    current_block: u64,
+) -> CoinjResult {
+    if escrow.is_null() {
+        return CoinjResult::ErrorInvalidInput;
+    }
+
+    let escrow_ref = &*escrow;
+
+    // Convert to internal type
+    let state = match escrow_ref.state {
+        0 => EscrowState::Locked,
+        1 => EscrowState::Released,
+        2 => EscrowState::Refunded,
+        _ => return CoinjResult::ErrorInvalidInput,
+    };
+
+    let internal_escrow = BountyEscrow {
+        id: escrow_ref.id,
+        submitter: escrow_ref.submitter,
+        amount: escrow_ref.amount,
+        problem_hash: escrow_ref.problem_hash,
+        created_block: escrow_ref.created_block,
+        expiry_block: escrow_ref.expiry_block,
+        state,
+        recipient: if escrow_ref.has_recipient != 0 {
+            Some(escrow_ref.recipient)
+        } else {
+            None
+        },
+        settled_block: if escrow_ref.has_settled_block != 0 {
+            Some(escrow_ref.settled_block)
+        } else {
+            None
+        },
+        settlement_tx: if escrow_ref.has_settlement_tx != 0 {
+            Some(escrow_ref.settlement_tx)
+        } else {
+            None
+        },
+    };
+
+    match validate_escrow_refund(&internal_escrow, current_block) {
+        Ok(_) => CoinjResult::Ok,
+        Err(_) => CoinjResult::ErrorInvalidInput,
     }
 }
 
