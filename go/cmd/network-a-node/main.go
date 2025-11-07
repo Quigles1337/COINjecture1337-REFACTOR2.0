@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ const Version = "4.5.0+-network-a"
 func main() {
 	// Parse flags
 	validatorKeyHex := flag.String("validator-key", "", "Validator public key (32 hex chars)")
+	validatorSetHex := flag.String("validator-set", "", "Comma-separated list of all validator keys (for multi-validator mode)")
 	dbPath := flag.String("db", "./data/network-a.db", "Database path")
 	blockTime := flag.Duration("block-time", 2*time.Second, "Block production interval")
 	flag.Parse()
@@ -46,7 +48,27 @@ func main() {
 		}
 		copy(validatorKey[:], keyBytes)
 	}
-	fmt.Printf("✓ Validator key: %x\n\n", validatorKey)
+	fmt.Printf("✓ Validator key: %x\n", validatorKey)
+
+	// Parse validator set (comma-separated hex keys)
+	var validators [][32]byte
+	if *validatorSetHex != "" {
+		validatorStrs := strings.Split(*validatorSetHex, ",")
+		validators = make([][32]byte, len(validatorStrs))
+		for i, vStr := range validatorStrs {
+			vStr = strings.TrimSpace(vStr)
+			keyBytes, err := hex.DecodeString(vStr)
+			if err != nil || len(keyBytes) != 32 {
+				log.WithError(err).Fatal(fmt.Sprintf("Invalid validator key in set at index %d", i))
+			}
+			copy(validators[i][:], keyBytes)
+		}
+		fmt.Printf("✓ Validator set: %d validators\n\n", len(validators))
+	} else {
+		// Single validator mode
+		validators = [][32]byte{validatorKey}
+		fmt.Printf("✓ Single validator mode\n\n")
+	}
 
 	// Initialize database schema
 	if err := state.InitializeDB(*dbPath); err != nil {
@@ -75,7 +97,7 @@ func main() {
 	// Create consensus config
 	consensusCfg := consensus.ConsensusConfig{
 		BlockTime:    *blockTime,
-		Validators:   [][32]byte{validatorKey},
+		Validators:   validators,
 		ValidatorKey: validatorKey,
 		IsValidator:  true,
 	}
