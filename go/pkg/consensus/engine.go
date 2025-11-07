@@ -240,7 +240,11 @@ func (e *Engine) produceBlock() error {
 	}
 
 	// Distribute block rewards (base reward + transaction fees)
-	totalFees := block.GasUsed // Simple fee model: 1 wei per gas unit for now
+	// Calculate total fees from all transactions
+	totalFees := uint64(0)
+	for _, tx := range block.Transactions {
+		totalFees += tx.Fee
+	}
 	if e.distributor != nil {
 		if err := e.distributor.DistributeBlockRewards(block.BlockNumber, e.config.ValidatorKey, totalFees); err != nil {
 			e.log.WithError(err).Error("Failed to distribute block rewards")
