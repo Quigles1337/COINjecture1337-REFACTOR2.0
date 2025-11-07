@@ -57,18 +57,16 @@ func NewStateManager(dbPath string, log *logger.Logger) (*StateManager, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Enable WAL mode for better concurrency
+	// Enable WAL mode for better concurrency (non-fatal on Windows)
 	_, err = db.Exec("PRAGMA journal_mode=WAL")
 	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to enable WAL: %w", err)
+		log.WithError(err).Warn("Failed to enable WAL mode (continuing with default journaling)")
 	}
 
-	// Enable foreign keys
+	// Enable foreign keys (non-fatal - we don't use them yet)
 	_, err = db.Exec("PRAGMA foreign_keys=ON")
 	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+		log.WithError(err).Warn("Failed to enable foreign keys (continuing without)")
 	}
 
 	sm := &StateManager{
