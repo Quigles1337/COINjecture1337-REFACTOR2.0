@@ -11,6 +11,7 @@ use coinject_mempool::{ProblemMarketplace, TransactionPool};
 use coinject_network::{NetworkConfig, NetworkEvent, NetworkService};
 use coinject_rpc::{RpcServer, RpcServerState};
 use coinject_state::AccountState;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
@@ -225,16 +226,20 @@ impl CoinjectNode {
             }
         });
 
+        // Create block buffer for out-of-order blocks
+        let block_buffer: Arc<RwLock<HashMap<u64, coinject_core::Block>>> = Arc::new(RwLock::new(HashMap::new()));
+
         // Spawn network event handler
         let chain = Arc::clone(&self.chain);
         let state = Arc::clone(&self.state);
         let validator = Arc::clone(&self.validator);
         let tx_pool = Arc::clone(&self.tx_pool);
         let network_tx_for_events = network_cmd_tx.clone();
+        let buffer_for_events = Arc::clone(&block_buffer);
 
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
-                Self::handle_network_event(event, &chain, &state, &validator, &tx_pool, &network_tx_for_events).await;
+                Self::handle_network_event(event, &chain, &state, &validator, &tx_pool, &network_tx_for_events, &buffer_for_events).await;
             }
         });
 
@@ -283,42 +288,74 @@ impl CoinjectNode {
         validator: &Arc<BlockValidator>,
         tx_pool: &Arc<RwLock<TransactionPool>>,
         network_tx: &mpsc::UnboundedSender<NetworkCommand>,
+        block_buffer: &Arc<RwLock<HashMap<u64, coinject_core::Block>>>,
     ) {
         match event {
             NetworkEvent::BlockReceived { block, peer } => {
                 println!("📥 Received block {} from {:?}", block.header.height, peer);
 
-                // Get current best block
                 let best_height = chain.best_block_height().await;
-                let best_hash = chain.best_block_hash().await;
+                let expected_height = best_height + 1;
 
-                // Validate block
-                match validator.validate_block(&block, &best_hash, best_height + 1) {
-                    Ok(()) => {
-                        // Store block
-                        match chain.store_block(&block).await {
-                            Ok(is_new_best) => {
-                                if is_new_best {
-                                    // Apply block transactions to state
-                                    if let Err(e) = Self::apply_block_transactions(&block, state) {
-                                        println!("❌ Failed to apply block transactions: {}", e);
-                                    } else {
-                                        println!("✅ Block accepted and applied to chain");
+                // Check if block is the next sequential block we need
+                if block.header.height == expected_height {
+                    // This is the next block we need - validate and apply immediately
+                    let best_hash = chain.best_block_hash().await;
 
-                                        // Remove included transactions from pool
-                                        let mut pool = tx_pool.write().await;
-                                        for tx in &block.transactions {
-                                            pool.remove(&tx.hash());
+                    match validator.validate_block(&block, &best_hash, expected_height) {
+                        Ok(()) => {
+                            // Store and apply block
+                            match chain.store_block(&block).await {
+                                Ok(is_new_best) => {
+                                    if is_new_best {
+                                        // Apply block transactions to state
+                                        if let Err(e) = Self::apply_block_transactions(&block, state) {
+                                            println!("❌ Failed to apply block transactions: {}", e);
+                                        } else {
+                                            println!("✅ Block {} accepted and applied to chain", block.header.height);
+
+                                            // Remove included transactions from pool
+                                            let mut pool = tx_pool.write().await;
+                                            for tx in &block.transactions {
+                                                pool.remove(&tx.hash());
+                                            }
+                                            drop(pool);
+
+                                            // After applying this block, try to apply buffered blocks sequentially
+                                            Self::process_buffered_blocks(
+                                                chain,
+                                                state,
+                                                validator,
+                                                tx_pool,
+                                                block_buffer,
+                                            ).await;
                                         }
                                     }
                                 }
+                                Err(e) => println!("❌ Failed to store block: {}", e),
                             }
-                            Err(e) => println!("❌ Failed to store block: {}", e),
+                        }
+                        Err(e) => {
+                            println!("❌ Block validation failed: {}", e);
                         }
                     }
-                    Err(e) => {
-                        println!("❌ Block validation failed: {}", e);
+                } else if block.header.height > expected_height {
+                    // Future block - add to buffer for later processing
+                    let mut buffer = block_buffer.write().await;
+
+                    // Only buffer if we don't already have it
+                    if !buffer.contains_key(&block.header.height) {
+                        println!(
+                            "🗃️  Buffering future block {} (expected: {}, buffer size: {})",
+                            block.header.height,
+                            expected_height,
+                            buffer.len() + 1
+                        );
+                        buffer.insert(block.header.height, block);
                     }
+                } else {
+                    // Old block we already have - ignore it
+                    println!("⏭️  Ignoring old block {} (current height: {})", block.header.height, best_height);
                 }
             }
             NetworkEvent::TransactionReceived { tx, peer } => {
@@ -408,6 +445,76 @@ impl CoinjectNode {
 
                 if sent_count > 0 {
                     println!("📤 Sent {} blocks in response to sync request", sent_count);
+                }
+            }
+        }
+    }
+
+    /// Process buffered blocks sequentially
+    async fn process_buffered_blocks(
+        chain: &Arc<ChainState>,
+        state: &Arc<AccountState>,
+        validator: &Arc<BlockValidator>,
+        tx_pool: &Arc<RwLock<TransactionPool>>,
+        block_buffer: &Arc<RwLock<HashMap<u64, coinject_core::Block>>>,
+    ) {
+        loop {
+            let best_height = chain.best_block_height().await;
+            let next_height = best_height + 1;
+
+            // Check if we have the next sequential block in buffer
+            let block_opt = {
+                let mut buffer = block_buffer.write().await;
+                buffer.remove(&next_height)
+            };
+
+            match block_opt {
+                Some(block) => {
+                    println!("🔄 Processing buffered block {} from buffer", next_height);
+
+                    let best_hash = chain.best_block_hash().await;
+
+                    // Validate the buffered block
+                    match validator.validate_block(&block, &best_hash, next_height) {
+                        Ok(()) => {
+                            // Store and apply
+                            match chain.store_block(&block).await {
+                                Ok(is_new_best) => {
+                                    if is_new_best {
+                                        if let Err(e) = Self::apply_block_transactions(&block, state) {
+                                            println!("❌ Failed to apply buffered block transactions: {}", e);
+                                            break;
+                                        } else {
+                                            println!("✅ Buffered block {} applied to chain", next_height);
+
+                                            // Remove included transactions from pool
+                                            let mut pool = tx_pool.write().await;
+                                            for tx in &block.transactions {
+                                                pool.remove(&tx.hash());
+                                            }
+                                            drop(pool);
+
+                                            // Continue loop to check for next sequential block
+                                        }
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("❌ Failed to store buffered block: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("❌ Buffered block validation failed: {}", e);
+                            break;
+                        }
+                    }
+                }
+                None => {
+                    // No more sequential blocks in buffer
+                    break;
                 }
             }
         }
