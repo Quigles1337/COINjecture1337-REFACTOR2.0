@@ -20,6 +20,8 @@ use tokio::time;
 enum NetworkCommand {
     BroadcastBlock(coinject_core::Block),
     BroadcastTransaction(coinject_core::Transaction),
+    BroadcastStatus { best_height: u64, best_hash: coinject_core::Hash, genesis_hash: coinject_core::Hash },
+    RequestBlocks { from_height: u64, to_height: u64 },
 }
 
 /// Main node service coordinating all blockchain components
@@ -206,6 +208,17 @@ impl CoinjectNode {
                                     eprintln!("Failed to broadcast transaction: {}", e);
                                 }
                             }
+                            NetworkCommand::BroadcastStatus { best_height, best_hash, genesis_hash } => {
+                                if let Err(e) = network.broadcast_status(best_height, best_hash, genesis_hash) {
+                                    eprintln!("Failed to broadcast status: {}", e);
+                                }
+                            }
+                            NetworkCommand::RequestBlocks { from_height, to_height } => {
+                                println!("📡 Requesting blocks {}-{} from network", from_height, to_height);
+                                if let Err(e) = network.request_blocks(from_height, to_height) {
+                                    eprintln!("Failed to request blocks: {}", e);
+                                }
+                            }
                         }
                     }
                 }
@@ -217,10 +230,33 @@ impl CoinjectNode {
         let state = Arc::clone(&self.state);
         let validator = Arc::clone(&self.validator);
         let tx_pool = Arc::clone(&self.tx_pool);
+        let network_tx_for_events = network_cmd_tx.clone();
 
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
-                Self::handle_network_event(event, &chain, &state, &validator, &tx_pool).await;
+                Self::handle_network_event(event, &chain, &state, &validator, &tx_pool, &network_tx_for_events).await;
+            }
+        });
+
+        // Spawn periodic status broadcast task
+        let chain_for_status = Arc::clone(&self.chain);
+        let genesis_hash = self.chain.genesis_hash();
+        let network_tx_for_status = network_cmd_tx.clone();
+
+        tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_secs(10));
+            loop {
+                interval.tick().await;
+                let best_height = chain_for_status.best_block_height().await;
+                let best_hash = chain_for_status.best_block_hash().await;
+
+                if let Err(e) = network_tx_for_status.send(NetworkCommand::BroadcastStatus {
+                    best_height,
+                    best_hash,
+                    genesis_hash,
+                }) {
+                    eprintln!("Failed to send status broadcast command: {}", e);
+                }
             }
         });
 
@@ -246,6 +282,7 @@ impl CoinjectNode {
         state: &Arc<AccountState>,
         validator: &Arc<BlockValidator>,
         tx_pool: &Arc<RwLock<TransactionPool>>,
+        network_tx: &mpsc::UnboundedSender<NetworkCommand>,
     ) {
         match event {
             NetworkEvent::BlockReceived { block, peer } => {
@@ -304,7 +341,75 @@ impl CoinjectNode {
             NetworkEvent::PeerDisconnected(peer) => {
                 println!("👋 Peer disconnected: {:?}", peer);
             }
-            _ => {}
+            NetworkEvent::StatusUpdate { peer, best_height, best_hash } => {
+                let our_height = chain.best_block_height().await;
+
+                println!(
+                    "📊 Status update from {:?}: height {} (ours: {})",
+                    peer, best_height, our_height
+                );
+
+                // If peer is ahead, trigger sync
+                if best_height > our_height + 1 {
+                    let sync_from = our_height + 1;
+                    let sync_to = best_height;
+
+                    println!(
+                        "🔄 Peer is ahead! Requesting blocks {}-{} for sync",
+                        sync_from, sync_to
+                    );
+
+                    // Request missing blocks (in chunks of 100 to avoid overwhelming)
+                    let chunk_size = 100u64;
+                    let mut current = sync_from;
+
+                    while current <= sync_to {
+                        let end = std::cmp::min(current + chunk_size - 1, sync_to);
+
+                        if let Err(e) = network_tx.send(NetworkCommand::RequestBlocks {
+                            from_height: current,
+                            to_height: end,
+                        }) {
+                            eprintln!("Failed to send RequestBlocks command: {}", e);
+                            break;
+                        }
+
+                        current = end + 1;
+                    }
+                }
+            }
+            NetworkEvent::BlocksRequested { peer, from_height, to_height } => {
+                println!(
+                    "📮 Blocks requested by {:?}: heights {}-{}",
+                    peer, from_height, to_height
+                );
+
+                // Respond by broadcasting the requested blocks
+                let mut sent_count = 0;
+                for height in from_height..=to_height {
+                    match chain.get_block_by_height(height) {
+                        Ok(Some(block)) => {
+                            if let Err(e) = network_tx.send(NetworkCommand::BroadcastBlock(block)) {
+                                eprintln!("Failed to broadcast block {}: {}", height, e);
+                                break;
+                            }
+                            sent_count += 1;
+                        }
+                        Ok(None) => {
+                            // We don't have this block, stop
+                            break;
+                        }
+                        Err(e) => {
+                            eprintln!("Error fetching block {}: {}", height, e);
+                            break;
+                        }
+                    }
+                }
+
+                if sent_count > 0 {
+                    println!("📤 Sent {} blocks in response to sync request", sent_count);
+                }
+            }
         }
     }
 

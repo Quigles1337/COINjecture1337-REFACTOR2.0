@@ -112,6 +112,12 @@ pub enum NetworkEvent {
         best_height: u64,
         best_hash: Hash,
     },
+    /// Blocks requested by peer (for sync)
+    BlocksRequested {
+        peer: PeerId,
+        from_height: u64,
+        to_height: u64,
+    },
 }
 
 impl NetworkService {
@@ -273,6 +279,21 @@ impl NetworkService {
         self.peers.len()
     }
 
+    /// Broadcast GetBlocks request
+    pub fn request_blocks(
+        &mut self,
+        from: u64,
+        to: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let message = NetworkMessage::GetBlocks { from, to };
+        let data = bincode::serialize(&message)?;
+        self.swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(self.topics.blocks.clone(), data)?;
+        Ok(())
+    }
+
     /// Handle incoming gossipsub message
     fn handle_gossipsub_message(&mut self, peer: PeerId, message: Vec<u8>) {
         match bincode::deserialize::<NetworkMessage>(&message) {
@@ -297,6 +318,13 @@ impl NetworkService {
                     peer,
                     best_height,
                     best_hash,
+                });
+            }
+            Ok(NetworkMessage::GetBlocks { from, to }) => {
+                let _ = self.event_tx.send(NetworkEvent::BlocksRequested {
+                    peer,
+                    from_height: from,
+                    to_height: to,
                 });
             }
             Ok(_) => {
