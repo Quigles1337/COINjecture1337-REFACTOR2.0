@@ -16,6 +16,12 @@ use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time;
 
+/// Commands that can be sent to the network task
+enum NetworkCommand {
+    BroadcastBlock(coinject_core::Block),
+    BroadcastTransaction(coinject_core::Transaction),
+}
+
 /// Main node service coordinating all blockchain components
 pub struct CoinjectNode {
     config: NodeConfig,
@@ -25,7 +31,7 @@ pub struct CoinjectNode {
     marketplace: Arc<RwLock<ProblemMarketplace>>,
     tx_pool: Arc<RwLock<TransactionPool>>,
     miner: Option<Arc<RwLock<Miner>>>,
-    network: Option<NetworkService>,
+    network_cmd_tx: Option<mpsc::UnboundedSender<NetworkCommand>>,
     rpc: Option<RpcServer>,
     shutdown_tx: mpsc::Sender<()>,
     shutdown_rx: mpsc::Receiver<()>,
@@ -123,7 +129,7 @@ impl CoinjectNode {
             marketplace,
             tx_pool,
             miner,
-            network: None,
+            network_cmd_tx: None,
             rpc: None,
             shutdown_tx,
             shutdown_rx,
@@ -148,6 +154,9 @@ impl CoinjectNode {
         println!("   Listening on: {}", self.config.p2p_addr);
         println!();
 
+        // Create command channel for network operations
+        let (network_cmd_tx, mut network_cmd_rx) = mpsc::unbounded_channel::<NetworkCommand>();
+
         // Start RPC server
         println!("🔌 Starting JSON-RPC server...");
         let rpc_addr = self.config.rpc_socket_addr()?;
@@ -168,7 +177,7 @@ impl CoinjectNode {
         println!("   RPC listening on: {}", rpc_addr);
         println!();
 
-        self.network = Some(network_service);
+        self.network_cmd_tx = Some(network_cmd_tx.clone());
         self.rpc = Some(rpc_server);
 
         // Start event loop
@@ -176,14 +185,42 @@ impl CoinjectNode {
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         println!();
 
+        // Spawn network task (processes events and commands)
+        tokio::task::spawn_local(async move {
+            let mut network = network_service;
+            loop {
+                tokio::select! {
+                    // Process network events
+                    _ = network.process_events() => {},
+
+                    // Handle commands from other tasks
+                    Some(cmd) = network_cmd_rx.recv() => {
+                        match cmd {
+                            NetworkCommand::BroadcastBlock(block) => {
+                                if let Err(e) = network.broadcast_block(block) {
+                                    eprintln!("Failed to broadcast block: {}", e);
+                                }
+                            }
+                            NetworkCommand::BroadcastTransaction(tx) => {
+                                if let Err(e) = network.broadcast_transaction(tx) {
+                                    eprintln!("Failed to broadcast transaction: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
         // Spawn network event handler
         let chain = Arc::clone(&self.chain);
         let state = Arc::clone(&self.state);
         let validator = Arc::clone(&self.validator);
+        let tx_pool = Arc::clone(&self.tx_pool);
 
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
-                Self::handle_network_event(event, &chain, &state, &validator).await;
+                Self::handle_network_event(event, &chain, &state, &validator, &tx_pool).await;
             }
         });
 
@@ -192,9 +229,10 @@ impl CoinjectNode {
             let miner = Arc::clone(miner);
             let chain = Arc::clone(&self.chain);
             let tx_pool = Arc::clone(&self.tx_pool);
+            let network_tx = network_cmd_tx.clone();
 
             tokio::spawn(async move {
-                Self::mining_loop(miner, chain, tx_pool).await;
+                Self::mining_loop(miner, chain, tx_pool, network_tx).await;
             });
         }
 
@@ -207,6 +245,7 @@ impl CoinjectNode {
         chain: &Arc<ChainState>,
         state: &Arc<AccountState>,
         validator: &Arc<BlockValidator>,
+        tx_pool: &Arc<RwLock<TransactionPool>>,
     ) {
         match event {
             NetworkEvent::BlockReceived { block, peer } => {
@@ -223,11 +262,17 @@ impl CoinjectNode {
                         match chain.store_block(&block).await {
                             Ok(is_new_best) => {
                                 if is_new_best {
-                                    // Apply to state
-                                    if let Err(e) = validator.apply_block(&block, state) {
-                                        println!("❌ Failed to apply block to state: {}", e);
+                                    // Apply block transactions to state
+                                    if let Err(e) = Self::apply_block_transactions(&block, state) {
+                                        println!("❌ Failed to apply block transactions: {}", e);
                                     } else {
                                         println!("✅ Block accepted and applied to chain");
+
+                                        // Remove included transactions from pool
+                                        let mut pool = tx_pool.write().await;
+                                        for tx in &block.transactions {
+                                            pool.remove(&tx.hash());
+                                        }
                                     }
                                 }
                             }
@@ -239,9 +284,19 @@ impl CoinjectNode {
                     }
                 }
             }
-            NetworkEvent::TransactionReceived { tx: _, peer } => {
-                println!("📨 Received transaction from {:?}", peer);
-                // TODO: Add to transaction pool
+            NetworkEvent::TransactionReceived { tx, peer } => {
+                println!("📨 Received transaction {:?} from {:?}", tx.hash(), peer);
+
+                // Validate and add to transaction pool
+                if tx.verify_signature() {
+                    let mut pool = tx_pool.write().await;
+                    match pool.add(tx) {
+                        Ok(hash) => println!("✅ Added transaction {:?} to pool", hash),
+                        Err(e) => println!("❌ Failed to add transaction to pool: {}", e),
+                    }
+                } else {
+                    println!("❌ Invalid transaction signature, rejecting");
+                }
             }
             NetworkEvent::PeerConnected(peer) => {
                 println!("🤝 Peer connected: {:?}", peer);
@@ -253,11 +308,47 @@ impl CoinjectNode {
         }
     }
 
+    /// Apply block transactions to account state
+    fn apply_block_transactions(
+        block: &coinject_core::Block,
+        state: &Arc<AccountState>,
+    ) -> Result<(), String> {
+        // Apply coinbase reward
+        let miner = block.header.miner;
+        let reward = block.coinbase.reward;
+        let current_balance = state.get_balance(&miner);
+        state.set_balance(&miner, current_balance + reward)
+            .map_err(|e| format!("Failed to set miner balance: {}", e))?;
+
+        // Apply regular transactions
+        for tx in &block.transactions {
+            // Deduct from sender
+            let sender_balance = state.get_balance(&tx.from);
+            if sender_balance < tx.amount + tx.fee {
+                return Err(format!("Insufficient balance for tx {:?}", tx.hash()));
+            }
+            state.set_balance(&tx.from, sender_balance - tx.amount - tx.fee)
+                .map_err(|e| format!("Failed to set sender balance: {}", e))?;
+            state.set_nonce(&tx.from, tx.nonce + 1)
+                .map_err(|e| format!("Failed to set sender nonce: {}", e))?;
+
+            // Credit recipient
+            let recipient_balance = state.get_balance(&tx.to);
+            state.set_balance(&tx.to, recipient_balance + tx.amount)
+                .map_err(|e| format!("Failed to set recipient balance: {}", e))?;
+
+            // Fee goes to miner (already included in reward calculation)
+        }
+
+        Ok(())
+    }
+
     /// Mining loop
     async fn mining_loop(
         miner: Arc<RwLock<Miner>>,
         chain: Arc<ChainState>,
-        _tx_pool: Arc<RwLock<TransactionPool>>,
+        tx_pool: Arc<RwLock<TransactionPool>>,
+        network_tx: mpsc::UnboundedSender<NetworkCommand>,
     ) {
         let mut interval = time::interval(Duration::from_secs(10));
 
@@ -269,13 +360,17 @@ impl CoinjectNode {
 
             println!("⛏️  Mining block {}...", best_height + 1);
 
-            // TODO: Select transactions from pool
-            let transactions = vec![];
+            // Select transactions from pool (top 100 by fee)
+            let pool = tx_pool.read().await;
+            let transactions = pool.get_top_n(100);
+            drop(pool);
+
+            println!("   Including {} transactions", transactions.len());
 
             // Mine block
             let mut miner_lock = miner.write().await;
             if let Some(block) = miner_lock
-                .mine_block(best_hash, best_height + 1, transactions)
+                .mine_block(best_hash, best_height + 1, transactions.clone())
                 .await
             {
                 println!("🎉 Mined new block {}!", block.header.height);
@@ -284,9 +379,22 @@ impl CoinjectNode {
                 // Store block
                 if let Err(e) = chain.store_block(&block).await {
                     println!("❌ Failed to store mined block: {}", e);
+                    continue;
                 }
 
-                // TODO: Broadcast to network
+                // Remove mined transactions from pool
+                let mut pool = tx_pool.write().await;
+                for tx in &transactions {
+                    pool.remove(&tx.hash());
+                }
+                drop(pool);
+
+                // Broadcast to network
+                if let Err(e) = network_tx.send(NetworkCommand::BroadcastBlock(block)) {
+                    println!("❌ Failed to send broadcast command: {}", e);
+                } else {
+                    println!("📡 Broadcasted block to network");
+                }
             } else {
                 println!("❌ Mining failed");
             }

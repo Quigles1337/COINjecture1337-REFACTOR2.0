@@ -44,6 +44,14 @@ impl AccountState {
             .unwrap_or(0)
     }
 
+    /// Set account nonce
+    pub fn set_nonce(&self, address: &Address, nonce: u64) -> Result<(), sled::Error> {
+        let key = Self::nonce_key(address);
+        let value = nonce.to_le_bytes();
+        self.db.insert(&key, &value[..])?;
+        Ok(())
+    }
+
     /// Increment account nonce
     pub fn increment_nonce(&self, address: &Address) -> Result<u64, sled::Error> {
         let key = Self::nonce_key(address);
