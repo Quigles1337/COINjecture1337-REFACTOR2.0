@@ -33,6 +33,10 @@ impl KeyPair {
 pub struct PublicKey([u8; 32]);
 
 impl PublicKey {
+    pub fn from_bytes(bytes: [u8; 32]) -> Self {
+        PublicKey(bytes)
+    }
+
     pub fn verify(&self, message: &[u8], signature: &Ed25519Signature) -> bool {
         if let Ok(verifying_key) = VerifyingKey::from_bytes(&self.0) {
             let sig = Signature::from_bytes(&signature.0);

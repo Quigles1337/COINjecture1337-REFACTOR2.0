@@ -12,3 +12,4 @@ tokio.workspace = true
 serde.workspace = true
 bincode.workspace = true
 thiserror.workspace = true
+chrono = "0.4"
