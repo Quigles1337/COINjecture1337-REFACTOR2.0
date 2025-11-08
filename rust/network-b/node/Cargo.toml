@@ -22,5 +22,9 @@ coinject-tokenomics = { path = "../tokenomics" }
 tokio.workspace = true
 clap.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 anyhow.workspace = true
+sled.workspace = true
+thiserror.workspace = true
+bincode.workspace = true
+hex.workspace = true

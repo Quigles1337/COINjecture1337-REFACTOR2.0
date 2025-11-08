@@ -1,32 +1,76 @@
 // COINjecture Node
 // Network B - NP-hard Consensus Blockchain
 
-use clap::Parser;
+mod chain;
+mod config;
+mod genesis;
+mod service;
+mod validator;
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Run in development mode
-    #[arg(long)]
-    dev: bool,
+use config::NodeConfig;
+use service::CoinjectNode;
+use tokio::signal;
+use tracing_subscriber::EnvFilter;
 
-    /// Genesis address (base58)
-    #[arg(long)]
-    genesis: Option<String>,
-}
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
 
-fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .init();
 
-    let args = Args::parse();
+    // Display banner
+    print_banner();
 
-    println!("COINjecture Network B - Custom Layer 1 Blockchain");
-    println!("NP-hard consensus with η = 1/√2 tokenomics");
-    println!();
+    // Parse configuration
+    let config = NodeConfig::parse_args();
 
-    if args.dev {
-        println!("Running in development mode...");
+    // Create and start node
+    let mut node = CoinjectNode::new(config).await?;
+    node.start().await?;
+
+    // Wait for shutdown signal (Ctrl+C)
+    match signal::ctrl_c().await {
+        Ok(()) => {
+            println!();
+            println!("📡 Received shutdown signal (Ctrl+C)");
+            node.shutdown();
+        }
+        Err(err) => {
+            eprintln!("Unable to listen for shutdown signal: {}", err);
+        }
     }
 
-    println!("Node initialized successfully");
+    // Wait for graceful shutdown
+    node.wait_for_shutdown().await;
+
+    println!("👋 COINjecture Node stopped");
+    println!();
+
+    Ok(())
+}
+
+fn print_banner() {
+    println!(r#"
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║                                                               ║
+    ║   ██████╗ ██████╗ ██╗███╗   ██╗     ██╗███████╗ ██████╗████████╗███████╗██████╗   ║
+    ║  ██╔════╝██╔═══██╗██║████╗  ██║     ██║██╔════╝██╔════╝╚══██╔══╝██╔════╝██╔══██╗  ║
+    ║  ██║     ██║   ██║██║██╔██╗ ██║     ██║█████╗  ██║        ██║   █████╗  ██████╔╝  ║
+    ║  ██║     ██║   ██║██║██║╚██╗██║██   ██║██╔══╝  ██║        ██║   ██╔══╝  ██╔══██╗  ║
+    ║  ╚██████╗╚██████╔╝██║██║ ╚████║╚█████╔╝███████╗╚██████╗   ██║   ███████╗██║  ██║  ║
+    ║   ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚════╝ ╚══════╝ ╚═════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝  ║
+    ║                                                               ║
+    ║                    Network B - NP-Hard Consensus              ║
+    ║                    η = 1/√2 Tokenomics Engine                ║
+    ║                                                               ║
+    ╚═══════════════════════════════════════════════════════════════╝
+    "#);
+    println!("    Version: {}", env!("CARGO_PKG_VERSION"));
+    println!("    Repository: {}", env!("CARGO_PKG_REPOSITORY"));
+    println!();
 }
