@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  network-b-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: network-b-node:latest
+    container_name: network-b-node
+    ports:
+      - "30333:30333"  # P2P
+      - "9933:9933"    # RPC
+      - "9944:9944"    # WebSocket
+    volumes:
+      - network-b-data:/data
+    environment:
+      - RUST_LOG=info
+    command:
+      - --dev
+      - --base-path=/data
+      - --rpc-external
+      - --rpc-cors=all
+      - --ws-external
+      - --prometheus-external
+    restart: unless-stopped
+
+volumes:
+  network-b-data:
+    driver: local

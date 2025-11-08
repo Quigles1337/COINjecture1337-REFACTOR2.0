@@ -25,8 +25,8 @@ impl Default for MiningConfig {
         MiningConfig {
             miner_address: Address::from_bytes([0u8; 32]),
             target_block_time: Duration::from_secs(60), // 1 minute blocks
-            min_difficulty: 20,
-            max_difficulty: 40,
+            min_difficulty: 2,
+            max_difficulty: 8,
         }
     }
 }
@@ -51,6 +51,7 @@ pub struct Miner {
 
 impl Miner {
     pub fn new(config: MiningConfig) -> Self {
+        let starting_difficulty = config.min_difficulty;
         Miner {
             config,
             work_calculator: WorkScoreCalculator::new(),
@@ -61,7 +62,7 @@ impl Miner {
                 average_solve_time: Duration::from_secs(0),
                 hash_rate: 0.0,
             })),
-            difficulty: 20, // Starting difficulty (leading zeros in hash)
+            difficulty: starting_difficulty, // Use configured difficulty
         }
     }
 
@@ -364,16 +365,25 @@ impl Miner {
         let start_time = Instant::now();
         let mut hashes = 0u64;
 
+        println!("🎯 Mining target: hash must start with '{}'", target_prefix);
+
         for nonce in 0..u64::MAX {
             header.nonce = nonce;
             let hash = header.hash();
             hashes += 1;
 
             let hash_hex = hex::encode(hash.as_bytes());
+
+            // Debug: Print first few hash samples
+            if nonce < 5 {
+                println!("  Sample hash #{}: {}", nonce, hash_hex);
+            }
+
             if hash_hex.starts_with(&target_prefix) {
                 let elapsed = start_time.elapsed().as_secs_f64();
                 let hash_rate = hashes as f64 / elapsed;
-                println!("Found nonce {} after {} hashes ({:.2} H/s)", nonce, hashes, hash_rate);
+                println!("✅ Found nonce {} after {} hashes ({:.2} H/s)", nonce, hashes, hash_rate);
+                println!("   Block hash: {}", hash_hex);
                 return Some(hash);
             }
 
@@ -381,7 +391,8 @@ impl Miner {
             if nonce % 1_000_000 == 0 && nonce > 0 {
                 let elapsed = start_time.elapsed().as_secs_f64();
                 let hash_rate = hashes as f64 / elapsed;
-                println!("Mining... {} hashes ({:.2} H/s)", hashes, hash_rate);
+                println!("⛏️  Mining... {} hashes ({:.2} H/s) | Latest: {}...",
+                    hashes, hash_rate, &hash_hex[..16]);
             }
         }
 
