@@ -2,7 +2,7 @@
 // Provides wallet and client API access
 
 use coinject_core::{Address, Balance, Block, BlockHeader, Hash, Transaction};
-use coinject_mempool::{MarketplaceStats, ProblemSubmission, ProblemMarketplace};
+use coinject_mempool::{MarketplaceStats, ProblemSubmission, ProblemMarketplace, TransactionPool};
 use coinject_state::AccountState;
 use jsonrpsee::{
     core::{async_trait, RpcResult},
@@ -122,6 +122,7 @@ pub struct RpcServerState {
     pub account_state: Arc<AccountState>,
     pub blockchain: Arc<dyn BlockchainReader>,
     pub marketplace: Arc<RwLock<ProblemMarketplace>>,
+    pub tx_pool: Arc<RwLock<TransactionPool>>,
     pub chain_id: String,
     pub best_height: Arc<RwLock<u64>>,
     pub best_hash: Arc<RwLock<Hash>>,
@@ -229,18 +230,34 @@ impl CoinjectRpcServer for RpcServerImpl {
             ));
         }
 
-        let tx_hash = tx.hash();
-
-        // TODO: Add to mempool
-        // For now, just return the hash
-        Ok(hex::encode(tx_hash.as_bytes()))
+        // Add to mempool
+        let mut pool = self.state.tx_pool.write().await;
+        match pool.add(tx) {
+            Ok(hash) => Ok(hex::encode(hash.as_bytes())),
+            Err(e) => Err(ErrorObjectOwned::owned(
+                INVALID_PARAMS,
+                format!("Failed to add transaction to pool: {}", e),
+                None::<()>,
+            )),
+        }
     }
 
     async fn get_transaction_status(&self, tx_hash: String) -> RpcResult<TransactionStatus> {
-        let _hash = self.parse_hash(&tx_hash)?;
+        let hash = self.parse_hash(&tx_hash)?;
 
-        // TODO: Implement transaction tracking
-        // For now, return placeholder
+        // Check if transaction is in mempool (pending)
+        let pool = self.state.tx_pool.read().await;
+        if pool.contains(&hash) {
+            return Ok(TransactionStatus {
+                tx_hash: tx_hash.clone(),
+                status: "pending".to_string(),
+                block_height: None,
+            });
+        }
+        drop(pool);
+
+        // TODO: Check blockchain for confirmed transactions
+        // For now, if not in mempool, return unknown
         Ok(TransactionStatus {
             tx_hash: tx_hash.clone(),
             status: "unknown".to_string(),
@@ -374,6 +391,7 @@ mod tests {
             account_state: Arc::new(AccountState::new(&temp_dir).unwrap()),
             blockchain: Arc::new(MockBlockchainReader) as Arc<dyn BlockchainReader>,
             marketplace: Arc::new(RwLock::new(ProblemMarketplace::new())),
+            tx_pool: Arc::new(RwLock::new(TransactionPool::new())),
             chain_id: "test".to_string(),
             best_height: Arc::new(RwLock::new(0)),
             best_hash: Arc::new(RwLock::new(Hash::ZERO)),
@@ -400,6 +418,7 @@ mod tests {
             account_state: Arc::new(AccountState::new(&temp_dir).unwrap()),
             blockchain: Arc::new(MockBlockchainReader) as Arc<dyn BlockchainReader>,
             marketplace: Arc::new(RwLock::new(ProblemMarketplace::new())),
+            tx_pool: Arc::new(RwLock::new(TransactionPool::new())),
             chain_id: "test".to_string(),
             best_height: Arc::new(RwLock::new(0)),
             best_hash: Arc::new(RwLock::new(Hash::ZERO)),
