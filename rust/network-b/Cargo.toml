@@ -23,9 +23,10 @@ version = "4.5.0"
 # Async runtime
 tokio = { version = "1.41", features = ["full"] }
 async-trait = "0.1"
+futures = "0.3"
 
 # Networking
-libp2p = { version = "0.54", features = ["tcp", "noise", "yamux", "gossipsub", "mdns", "kad"] }
+libp2p = { version = "0.54", features = ["tcp", "tokio", "noise", "yamux", "gossipsub", "mdns", "kad", "identify", "macros"] }
 
 # Cryptography
 sha2 = "0.10"
