@@ -137,7 +137,7 @@ impl TransactionPool {
         }
 
         // Validate fee
-        if tx.fee < self.config.min_fee {
+        if tx.fee() < self.config.min_fee {
             self.stats.transactions_rejected += 1;
             return Err(PoolError::FeeTooLow);
         }
@@ -159,7 +159,7 @@ impl TransactionPool {
         {
             // Try to evict lowest-fee transaction if new one has higher fee
             if let Some(lowest) = self.queue.peek() {
-                if tx.fee > lowest.fee {
+                if tx.fee() > lowest.fee {
                     self.evict_lowest();
                 } else {
                     self.stats.transactions_rejected += 1;
@@ -175,7 +175,7 @@ impl TransactionPool {
         let pooled = PooledTransaction {
             tx: tx.clone(),
             tx_hash,
-            fee: tx.fee,
+            fee: tx.fee(),
             received_at: chrono::Utc::now().timestamp(),
         };
 

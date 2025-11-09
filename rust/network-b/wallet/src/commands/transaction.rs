@@ -3,7 +3,7 @@
 use crate::keystore::Keystore;
 use crate::rpc_client::RpcClient;
 use anyhow::{anyhow, Result};
-use coinject_core::{Address, Balance, Ed25519Signature, PublicKey, Transaction};
+use coinject_core::{Address, Balance, Ed25519Signature, PublicKey, Transaction, TransferTransaction};
 use colored::*;
 use ed25519_dalek::Signer;
 
@@ -73,7 +73,7 @@ pub async fn send_tokens(
     let sig_bytes = sig.to_bytes();
 
     // Create signed transaction
-    let signed_tx = Transaction {
+    let signed_tx = Transaction::Transfer(TransferTransaction {
         from: from_addr,
         to,
         amount,
@@ -81,7 +81,7 @@ pub async fn send_tokens(
         nonce,
         public_key,
         signature: Ed25519Signature::from_bytes(sig_bytes),
-    };
+    });
 
     // Serialize and encode
     let signed_tx_bytes = bincode::serialize(&signed_tx)?;

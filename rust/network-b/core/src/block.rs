@@ -146,7 +146,7 @@ impl Block {
 
     /// Get total fees from transactions
     pub fn total_fees(&self) -> u128 {
-        self.transactions.iter().map(|tx| tx.fee).sum()
+        self.transactions.iter().map(|tx| tx.fee()).sum()
     }
 }
 

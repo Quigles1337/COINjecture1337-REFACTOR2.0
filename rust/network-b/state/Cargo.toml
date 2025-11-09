@@ -11,3 +11,4 @@ coinject-core = { path = "../core" }
 sled.workspace = true
 serde.workspace = true
 bincode.workspace = true
+chrono.workspace = true

@@ -544,24 +544,34 @@ impl CoinjectNode {
 
         // Apply regular transactions
         for tx in &block.transactions {
-            // Validate transaction before applying
-            let sender_balance = state.get_balance(&tx.from);
+            // Pattern match on transaction type
+            match tx {
+                coinject_core::Transaction::Transfer(transfer_tx) => {
+                    // Validate transaction before applying
+                    let sender_balance = state.get_balance(&transfer_tx.from);
 
-            // Check if sender has sufficient balance
-            if sender_balance < tx.amount + tx.fee {
-                println!("⚠️  Skipping transaction {:?}: insufficient balance (has: {}, needs: {})",
-                    tx.hash(), sender_balance, tx.amount + tx.fee);
-                continue; // Skip this transaction and continue with the rest
-            }
+                    // Check if sender has sufficient balance
+                    if sender_balance < transfer_tx.amount + transfer_tx.fee {
+                        println!("⚠️  Skipping transaction {:?}: insufficient balance (has: {}, needs: {})",
+                            tx.hash(), sender_balance, transfer_tx.amount + transfer_tx.fee);
+                        continue; // Skip this transaction and continue with the rest
+                    }
 
-            // Apply the transaction
-            match Self::apply_single_transaction(tx, state) {
-                Ok(()) => {
-                    applied_txs.push(tx.hash());
+                    // Apply the transaction
+                    match Self::apply_single_transaction(tx, state) {
+                        Ok(()) => {
+                            applied_txs.push(tx.hash());
+                        }
+                        Err(e) => {
+                            println!("⚠️  Skipping transaction {:?}: {}", tx.hash(), e);
+                            continue; // Skip this transaction and continue with the rest
+                        }
+                    }
                 }
-                Err(e) => {
-                    println!("⚠️  Skipping transaction {:?}: {}", tx.hash(), e);
-                    continue; // Skip this transaction and continue with the rest
+                _ => {
+                    // TODO: Implement application logic for TimeLock, Escrow, and Channel transactions
+                    println!("⚠️  Skipping transaction {:?}: advanced transaction types not yet supported", tx.hash());
+                    continue;
                 }
             }
         }
@@ -579,20 +589,29 @@ impl CoinjectNode {
         tx: &coinject_core::Transaction,
         state: &Arc<AccountState>,
     ) -> Result<(), String> {
-        // Deduct from sender
-        let sender_balance = state.get_balance(&tx.from);
-        state.set_balance(&tx.from, sender_balance - tx.amount - tx.fee)
-            .map_err(|e| format!("Failed to set sender balance: {}", e))?;
-        state.set_nonce(&tx.from, tx.nonce + 1)
-            .map_err(|e| format!("Failed to set sender nonce: {}", e))?;
+        // Pattern match on transaction type to maintain economic mathematics
+        match tx {
+            coinject_core::Transaction::Transfer(transfer_tx) => {
+                // Deduct from sender
+                let sender_balance = state.get_balance(&transfer_tx.from);
+                state.set_balance(&transfer_tx.from, sender_balance - transfer_tx.amount - transfer_tx.fee)
+                    .map_err(|e| format!("Failed to set sender balance: {}", e))?;
+                state.set_nonce(&transfer_tx.from, transfer_tx.nonce + 1)
+                    .map_err(|e| format!("Failed to set sender nonce: {}", e))?;
 
-        // Credit recipient
-        let recipient_balance = state.get_balance(&tx.to);
-        state.set_balance(&tx.to, recipient_balance + tx.amount)
-            .map_err(|e| format!("Failed to set recipient balance: {}", e))?;
+                // Credit recipient
+                let recipient_balance = state.get_balance(&transfer_tx.to);
+                state.set_balance(&transfer_tx.to, recipient_balance + transfer_tx.amount)
+                    .map_err(|e| format!("Failed to set recipient balance: {}", e))?;
 
-        // Fee goes to miner (already included in reward calculation)
-        Ok(())
+                // Fee goes to miner (already included in reward calculation)
+                Ok(())
+            }
+            _ => {
+                // TODO: Implement application logic for TimeLock, Escrow, and Channel transactions
+                Err("Advanced transaction types not yet supported".to_string())
+            }
+        }
     }
 
     /// Mining loop

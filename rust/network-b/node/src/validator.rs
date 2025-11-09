@@ -160,46 +160,256 @@ impl BlockValidator {
 
         // Execute all transactions
         for tx in &block.transactions {
-            // Verify sender has sufficient balance
-            let sender_balance = state.get_balance(&tx.from);
-            let total_cost = tx.amount + tx.fee;
+            // Pattern match on transaction type for type-specific validation
+            match tx {
+                coinject_core::Transaction::Transfer(transfer_tx) => {
+                    // Verify sender has sufficient balance
+                    let sender_balance = state.get_balance(&transfer_tx.from);
+                    let total_cost = transfer_tx.amount + transfer_tx.fee;
 
-            if sender_balance < total_cost {
-                return Err(ValidationError::InvalidTransaction(format!(
-                    "Insufficient balance: has {}, needs {}",
-                    sender_balance, total_cost
-                )));
+                    if sender_balance < total_cost {
+                        return Err(ValidationError::InvalidTransaction(format!(
+                            "Insufficient balance: has {}, needs {}",
+                            sender_balance, total_cost
+                        )));
+                    }
+
+                    // Verify nonce
+                    let expected_nonce = state.get_nonce(&transfer_tx.from);
+                    if transfer_tx.nonce != expected_nonce {
+                        return Err(ValidationError::InvalidTransaction(format!(
+                            "Invalid nonce: expected {}, got {}",
+                            expected_nonce, transfer_tx.nonce
+                        )));
+                    }
+
+                    // Execute transfer
+                    state
+                        .transfer(&transfer_tx.from, &transfer_tx.to, transfer_tx.amount)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                    // Transfer fee to miner (maintains economic incentives)
+                    let sender_balance_after = state.get_balance(&transfer_tx.from);
+                    state
+                        .set_balance(&transfer_tx.from, sender_balance_after - transfer_tx.fee)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                    let miner_balance = state.get_balance(&block.header.miner);
+                    state
+                        .set_balance(&block.header.miner, miner_balance + transfer_tx.fee)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                    // Increment nonce
+                    state
+                        .increment_nonce(&transfer_tx.from)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+                }
+                coinject_core::Transaction::TimeLock(timelock_tx) => {
+                    // Verify sender has sufficient balance for amount + fee
+                    let sender_balance = state.get_balance(&timelock_tx.from);
+                    let total_cost = timelock_tx.amount + timelock_tx.fee;
+
+                    if sender_balance < total_cost {
+                        return Err(ValidationError::InvalidTransaction(format!(
+                            "Insufficient balance: has {}, needs {}",
+                            sender_balance, total_cost
+                        )));
+                    }
+
+                    // Verify nonce
+                    let expected_nonce = state.get_nonce(&timelock_tx.from);
+                    if timelock_tx.nonce != expected_nonce {
+                        return Err(ValidationError::InvalidTransaction(format!(
+                            "Invalid nonce: expected {}, got {}",
+                            expected_nonce, timelock_tx.nonce
+                        )));
+                    }
+
+                    // Deduct total cost from sender (funds go to time-lock)
+                    state
+                        .set_balance(&timelock_tx.from, sender_balance - total_cost)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                    // Transfer fee to miner (maintains economic incentives)
+                    let miner_balance = state.get_balance(&block.header.miner);
+                    state
+                        .set_balance(&block.header.miner, miner_balance + timelock_tx.fee)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                    // Increment nonce
+                    state
+                        .increment_nonce(&timelock_tx.from)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                    // TODO: Add to TimeLockState once validator receives state managers
+                    // The locked amount should be tracked separately and released at unlock_time
+                }
+                coinject_core::Transaction::Escrow(escrow_tx) => {
+                    // Pattern match on escrow type
+                    match &escrow_tx.escrow_type {
+                        coinject_core::EscrowType::Create { amount, .. } => {
+                            // Verify sender has sufficient balance for amount + fee
+                            let sender_balance = state.get_balance(&escrow_tx.from);
+                            let total_cost = amount + escrow_tx.fee;
+
+                            if sender_balance < total_cost {
+                                return Err(ValidationError::InvalidTransaction(format!(
+                                    "Insufficient balance: has {}, needs {}",
+                                    sender_balance, total_cost
+                                )));
+                            }
+
+                            // Verify nonce
+                            let expected_nonce = state.get_nonce(&escrow_tx.from);
+                            if escrow_tx.nonce != expected_nonce {
+                                return Err(ValidationError::InvalidTransaction(format!(
+                                    "Invalid nonce: expected {}, got {}",
+                                    expected_nonce, escrow_tx.nonce
+                                )));
+                            }
+
+                            // Deduct total cost from sender (funds go to escrow)
+                            state
+                                .set_balance(&escrow_tx.from, sender_balance - total_cost)
+                                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                            // Transfer fee to miner (maintains economic incentives)
+                            let miner_balance = state.get_balance(&block.header.miner);
+                            state
+                                .set_balance(&block.header.miner, miner_balance + escrow_tx.fee)
+                                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                            // Increment nonce
+                            state
+                                .increment_nonce(&escrow_tx.from)
+                                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                            // TODO: Create escrow in EscrowState once validator receives state managers
+                            // The escrowed amount should be tracked separately until released/refunded
+                        }
+                        coinject_core::EscrowType::Release | coinject_core::EscrowType::Refund => {
+                            // TODO: Verify escrow exists and signatures are valid
+                            // TODO: Release/refund funds based on escrow state
+                            // For now, just deduct fee and increment nonce
+                            let sender_balance = state.get_balance(&escrow_tx.from);
+
+                            if sender_balance < escrow_tx.fee {
+                                return Err(ValidationError::InvalidTransaction(format!(
+                                    "Insufficient balance for fee: has {}, needs {}",
+                                    sender_balance, escrow_tx.fee
+                                )));
+                            }
+
+                            let expected_nonce = state.get_nonce(&escrow_tx.from);
+                            if escrow_tx.nonce != expected_nonce {
+                                return Err(ValidationError::InvalidTransaction(format!(
+                                    "Invalid nonce: expected {}, got {}",
+                                    expected_nonce, escrow_tx.nonce
+                                )));
+                            }
+
+                            state
+                                .set_balance(&escrow_tx.from, sender_balance - escrow_tx.fee)
+                                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                            let miner_balance = state.get_balance(&block.header.miner);
+                            state
+                                .set_balance(&block.header.miner, miner_balance + escrow_tx.fee)
+                                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                            state
+                                .increment_nonce(&escrow_tx.from)
+                                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+                        }
+                    }
+                }
+                coinject_core::Transaction::Channel(channel_tx) => {
+                    // Verify initiator has sufficient balance for fee
+                    let sender_balance = state.get_balance(&channel_tx.from);
+
+                    if sender_balance < channel_tx.fee {
+                        return Err(ValidationError::InvalidTransaction(format!(
+                            "Insufficient balance for fee: has {}, needs {}",
+                            sender_balance, channel_tx.fee
+                        )));
+                    }
+
+                    // Verify nonce
+                    let expected_nonce = state.get_nonce(&channel_tx.from);
+                    if channel_tx.nonce != expected_nonce {
+                        return Err(ValidationError::InvalidTransaction(format!(
+                            "Invalid nonce: expected {}, got {}",
+                            expected_nonce, channel_tx.nonce
+                        )));
+                    }
+
+                    // Pattern match on channel operation type
+                    match &channel_tx.channel_type {
+                        coinject_core::ChannelType::Open { participant_a, participant_b, deposit_a, deposit_b, .. } => {
+                            // Verify both participants have sufficient deposits
+                            let balance_a = state.get_balance(participant_a);
+                            let balance_b = state.get_balance(participant_b);
+
+                            if balance_a < *deposit_a {
+                                return Err(ValidationError::InvalidTransaction(format!(
+                                    "Participant A insufficient balance: has {}, needs {}",
+                                    balance_a, deposit_a
+                                )));
+                            }
+
+                            if balance_b < *deposit_b {
+                                return Err(ValidationError::InvalidTransaction(format!(
+                                    "Participant B insufficient balance: has {}, needs {}",
+                                    balance_b, deposit_b
+                                )));
+                            }
+
+                            // Deduct deposits from both participants
+                            state
+                                .set_balance(participant_a, balance_a - *deposit_a)
+                                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+                            state
+                                .set_balance(participant_b, balance_b - *deposit_b)
+                                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                            // TODO: Create channel in ChannelState once validator receives state managers
+                        }
+                        coinject_core::ChannelType::Update { .. } => {
+                            // Update operations are off-chain, recorded on-chain for reference
+                            // No balance changes needed
+                            // TODO: Verify channel exists and signatures are valid
+                        }
+                        coinject_core::ChannelType::CooperativeClose { final_balance_a, final_balance_b } => {
+                            // TODO: Verify channel exists and signatures from both parties
+                            // TODO: Credit final balances to participants
+                            // Balances are u128 (Balance type), always non-negative
+                            // TODO: Verify balances match channel capacity
+                        }
+                        coinject_core::ChannelType::UnilateralClose { balance_a, balance_b, .. } => {
+                            // TODO: Verify channel exists and dispute proof
+                            // TODO: Credit balances to participants after dispute period
+                            // Balances are u128 (Balance type), always non-negative
+                            // TODO: Verify balances match channel capacity
+                        }
+                    }
+
+                    // Transfer fee to miner (maintains economic incentives)
+                    let sender_balance_after = state.get_balance(&channel_tx.from);
+                    state
+                        .set_balance(&channel_tx.from, sender_balance_after - channel_tx.fee)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                    let miner_balance = state.get_balance(&block.header.miner);
+                    state
+                        .set_balance(&block.header.miner, miner_balance + channel_tx.fee)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+
+                    // Increment nonce
+                    state
+                        .increment_nonce(&channel_tx.from)
+                        .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
+                }
             }
-
-            // Verify nonce
-            let expected_nonce = state.get_nonce(&tx.from);
-            if tx.nonce != expected_nonce {
-                return Err(ValidationError::InvalidTransaction(format!(
-                    "Invalid nonce: expected {}, got {}",
-                    expected_nonce, tx.nonce
-                )));
-            }
-
-            // Execute transfer
-            state
-                .transfer(&tx.from, &tx.to, tx.amount)
-                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
-
-            // Transfer fee to miner
-            let sender_balance_after = state.get_balance(&tx.from);
-            state
-                .set_balance(&tx.from, sender_balance_after - tx.fee)
-                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
-
-            let miner_balance = state.get_balance(&block.header.miner);
-            state
-                .set_balance(&block.header.miner, miner_balance + tx.fee)
-                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
-
-            // Increment nonce
-            state
-                .increment_nonce(&tx.from)
-                .map_err(|e| ValidationError::StateError(format!("{:?}", e)))?;
         }
 
         Ok(())
