@@ -128,10 +128,13 @@ impl TransactionPool {
 
     /// Add transaction to pool with validation
     pub fn add(&mut self, tx: Transaction) -> Result<Hash, PoolError> {
+        eprintln!("🔵 MEMPOOL: add() called!");
         let tx_hash = tx.hash();
+        eprintln!("🔵 MEMPOOL: transaction hash computed: {:?}", tx_hash);
 
         // Check for duplicate
         if self.seen.contains(&tx_hash) {
+            eprintln!("🔴 MEMPOOL: Duplicate transaction detected");
             self.stats.transactions_rejected += 1;
             return Err(PoolError::DuplicateTransaction);
         }

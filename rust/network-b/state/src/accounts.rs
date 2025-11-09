@@ -14,6 +14,11 @@ impl AccountState {
         Ok(AccountState { db })
     }
 
+    /// Create AccountState from an existing database
+    pub fn from_db(db: Db) -> Self {
+        AccountState { db }
+    }
+
     /// Get account balance
     pub fn get_balance(&self, address: &Address) -> Balance {
         let key = Self::balance_key(address);

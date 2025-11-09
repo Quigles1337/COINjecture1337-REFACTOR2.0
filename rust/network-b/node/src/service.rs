@@ -30,6 +30,9 @@ pub struct CoinjectNode {
     config: NodeConfig,
     chain: Arc<ChainState>,
     state: Arc<AccountState>,
+    timelock_state: Arc<TimeLockState>,
+    escrow_state: Arc<EscrowState>,
+    channel_state: Arc<ChannelState>,
     validator: Arc<BlockValidator>,
     marketplace: Arc<RwLock<ProblemMarketplace>>,
     tx_pool: Arc<RwLock<TransactionPool>>,
@@ -68,12 +71,10 @@ impl CoinjectNode {
         println!("   Best height: {}", best_height);
         println!();
 
-        // Initialize account state
+        // Initialize account state and advanced transaction states (sharing same DB)
         println!("💰 Initializing account state...");
-        let state = Arc::new(AccountState::new(config.state_db_path())?);
-
-        // Initialize advanced transaction state managers (sharing same DB with different prefixes)
         let state_db = Arc::new(sled::open(config.state_db_path())?);
+        let state = Arc::new(AccountState::from_db((*state_db).clone()));
         let timelock_state = Arc::new(TimeLockState::new(Arc::clone(&state_db)));
         let escrow_state = Arc::new(EscrowState::new(Arc::clone(&state_db)));
         let channel_state = Arc::new(ChannelState::new(Arc::clone(&state_db)));
@@ -134,6 +135,9 @@ impl CoinjectNode {
             config,
             chain,
             state,
+            timelock_state,
+            escrow_state,
+            channel_state,
             validator,
             marketplace,
             tx_pool,
@@ -172,9 +176,9 @@ impl CoinjectNode {
 
         let rpc_state = Arc::new(RpcServerState {
             account_state: Arc::clone(&self.state),
-            timelock_state: Arc::clone(&timelock_state),
-            escrow_state: Arc::clone(&escrow_state),
-            channel_state: Arc::clone(&channel_state),
+            timelock_state: Arc::clone(&self.timelock_state),
+            escrow_state: Arc::clone(&self.escrow_state),
+            channel_state: Arc::clone(&self.channel_state),
             blockchain: Arc::clone(&self.chain) as Arc<dyn coinject_rpc::BlockchainReader>,
             marketplace: Arc::clone(&self.marketplace),
             tx_pool: Arc::clone(&self.tx_pool),
@@ -241,6 +245,9 @@ impl CoinjectNode {
         // Spawn network event handler
         let chain = Arc::clone(&self.chain);
         let state = Arc::clone(&self.state);
+        let timelock_state = Arc::clone(&self.timelock_state);
+        let escrow_state = Arc::clone(&self.escrow_state);
+        let channel_state = Arc::clone(&self.channel_state);
         let validator = Arc::clone(&self.validator);
         let tx_pool = Arc::clone(&self.tx_pool);
         let network_tx_for_events = network_cmd_tx.clone();
@@ -248,7 +255,7 @@ impl CoinjectNode {
 
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
-                Self::handle_network_event(event, &chain, &state, &validator, &tx_pool, &network_tx_for_events, &buffer_for_events).await;
+                Self::handle_network_event(event, &chain, &state, &timelock_state, &escrow_state, &channel_state, &validator, &tx_pool, &network_tx_for_events, &buffer_for_events).await;
             }
         });
 
@@ -279,11 +286,14 @@ impl CoinjectNode {
             let miner = Arc::clone(miner);
             let chain = Arc::clone(&self.chain);
             let state = Arc::clone(&self.state);
+            let timelock_state = Arc::clone(&self.timelock_state);
+            let escrow_state = Arc::clone(&self.escrow_state);
+            let channel_state = Arc::clone(&self.channel_state);
             let tx_pool = Arc::clone(&self.tx_pool);
             let network_tx = network_cmd_tx.clone();
 
             tokio::spawn(async move {
-                Self::mining_loop(miner, chain, state, tx_pool, network_tx).await;
+                Self::mining_loop(miner, chain, state, timelock_state, escrow_state, channel_state, tx_pool, network_tx).await;
             });
         }
 
@@ -295,6 +305,9 @@ impl CoinjectNode {
         event: NetworkEvent,
         chain: &Arc<ChainState>,
         state: &Arc<AccountState>,
+        timelock_state: &Arc<TimeLockState>,
+        escrow_state: &Arc<EscrowState>,
+        channel_state: &Arc<ChannelState>,
         validator: &Arc<BlockValidator>,
         tx_pool: &Arc<RwLock<TransactionPool>>,
         network_tx: &mpsc::UnboundedSender<NetworkCommand>,
@@ -319,7 +332,7 @@ impl CoinjectNode {
                                 Ok(is_new_best) => {
                                     if is_new_best {
                                         // Apply block transactions to state
-                                        match Self::apply_block_transactions(&block, state) {
+                                        match Self::apply_block_transactions(&block, state, timelock_state, escrow_state, channel_state) {
                                             Ok(applied_txs) => {
                                                 println!("✅ Block {} accepted and applied to chain", block.header.height);
 
@@ -334,6 +347,9 @@ impl CoinjectNode {
                                                 Self::process_buffered_blocks(
                                                     chain,
                                                     state,
+                                                    timelock_state,
+                                                    escrow_state,
+                                                    channel_state,
                                                     validator,
                                                     tx_pool,
                                                     block_buffer,
@@ -467,6 +483,9 @@ impl CoinjectNode {
     async fn process_buffered_blocks(
         chain: &Arc<ChainState>,
         state: &Arc<AccountState>,
+        timelock_state: &Arc<TimeLockState>,
+        escrow_state: &Arc<EscrowState>,
+        channel_state: &Arc<ChannelState>,
         validator: &Arc<BlockValidator>,
         tx_pool: &Arc<RwLock<TransactionPool>>,
         block_buffer: &Arc<RwLock<HashMap<u64, coinject_core::Block>>>,
@@ -494,7 +513,7 @@ impl CoinjectNode {
                             match chain.store_block(&block).await {
                                 Ok(is_new_best) => {
                                     if is_new_best {
-                                        match Self::apply_block_transactions(&block, state) {
+                                        match Self::apply_block_transactions(&block, state, timelock_state, escrow_state, channel_state) {
                                             Ok(applied_txs) => {
                                                 println!("✅ Buffered block {} applied to chain", next_height);
 
@@ -541,6 +560,9 @@ impl CoinjectNode {
     fn apply_block_transactions(
         block: &coinject_core::Block,
         state: &Arc<AccountState>,
+        timelock_state: &Arc<TimeLockState>,
+        escrow_state: &Arc<EscrowState>,
+        channel_state: &Arc<ChannelState>,
     ) -> Result<Vec<coinject_core::Hash>, String> {
         // Apply coinbase reward
         let miner = block.header.miner;
@@ -550,37 +572,18 @@ impl CoinjectNode {
             .map_err(|e| format!("Failed to set miner balance: {}", e))?;
 
         let mut applied_txs = Vec::new();
+        let block_height = block.header.height;
 
         // Apply regular transactions
         for tx in &block.transactions {
-            // Pattern match on transaction type
-            match tx {
-                coinject_core::Transaction::Transfer(transfer_tx) => {
-                    // Validate transaction before applying
-                    let sender_balance = state.get_balance(&transfer_tx.from);
-
-                    // Check if sender has sufficient balance
-                    if sender_balance < transfer_tx.amount + transfer_tx.fee {
-                        println!("⚠️  Skipping transaction {:?}: insufficient balance (has: {}, needs: {})",
-                            tx.hash(), sender_balance, transfer_tx.amount + transfer_tx.fee);
-                        continue; // Skip this transaction and continue with the rest
-                    }
-
-                    // Apply the transaction
-                    match Self::apply_single_transaction(tx, state) {
-                        Ok(()) => {
-                            applied_txs.push(tx.hash());
-                        }
-                        Err(e) => {
-                            println!("⚠️  Skipping transaction {:?}: {}", tx.hash(), e);
-                            continue; // Skip this transaction and continue with the rest
-                        }
-                    }
+            // Apply the transaction
+            match Self::apply_single_transaction(tx, state, timelock_state, escrow_state, channel_state, block_height) {
+                Ok(()) => {
+                    applied_txs.push(tx.hash());
                 }
-                _ => {
-                    // TODO: Implement application logic for TimeLock, Escrow, and Channel transactions
-                    println!("⚠️  Skipping transaction {:?}: advanced transaction types not yet supported", tx.hash());
-                    continue;
+                Err(e) => {
+                    println!("⚠️  Skipping transaction {:?}: {}", tx.hash(), e);
+                    continue; // Skip this transaction and continue with the rest
                 }
             }
         }
@@ -597,12 +600,25 @@ impl CoinjectNode {
     fn apply_single_transaction(
         tx: &coinject_core::Transaction,
         state: &Arc<AccountState>,
+        timelock_state: &Arc<TimeLockState>,
+        escrow_state: &Arc<EscrowState>,
+        channel_state: &Arc<ChannelState>,
+        block_height: u64,
     ) -> Result<(), String> {
+        use coinject_core::{EscrowType, ChannelType};
+        use coinject_state::{Escrow, EscrowStatus, TimeLock, Channel, ChannelStatus};
+
         // Pattern match on transaction type to maintain economic mathematics
         match tx {
             coinject_core::Transaction::Transfer(transfer_tx) => {
-                // Deduct from sender
+                // Validate sender has sufficient balance
                 let sender_balance = state.get_balance(&transfer_tx.from);
+                if sender_balance < transfer_tx.amount + transfer_tx.fee {
+                    return Err(format!("Insufficient balance: has {}, needs {}",
+                        sender_balance, transfer_tx.amount + transfer_tx.fee));
+                }
+
+                // Deduct from sender
                 state.set_balance(&transfer_tx.from, sender_balance - transfer_tx.amount - transfer_tx.fee)
                     .map_err(|e| format!("Failed to set sender balance: {}", e))?;
                 state.set_nonce(&transfer_tx.from, transfer_tx.nonce + 1)
@@ -613,12 +629,180 @@ impl CoinjectNode {
                 state.set_balance(&transfer_tx.to, recipient_balance + transfer_tx.amount)
                     .map_err(|e| format!("Failed to set recipient balance: {}", e))?;
 
-                // Fee goes to miner (already included in reward calculation)
                 Ok(())
             }
-            _ => {
-                // TODO: Implement application logic for TimeLock, Escrow, and Channel transactions
-                Err("Advanced transaction types not yet supported".to_string())
+
+            coinject_core::Transaction::TimeLock(timelock_tx) => {
+                // Validate sender has sufficient balance
+                let sender_balance = state.get_balance(&timelock_tx.from);
+                if sender_balance < timelock_tx.amount + timelock_tx.fee {
+                    return Err(format!("Insufficient balance for timelock: has {}, needs {}",
+                        sender_balance, timelock_tx.amount + timelock_tx.fee));
+                }
+
+                // Deduct from sender
+                state.set_balance(&timelock_tx.from, sender_balance - timelock_tx.amount - timelock_tx.fee)
+                    .map_err(|e| format!("Failed to set sender balance: {}", e))?;
+                state.set_nonce(&timelock_tx.from, timelock_tx.nonce + 1)
+                    .map_err(|e| format!("Failed to set sender nonce: {}", e))?;
+
+                // Create timelock entry
+                let timelock = TimeLock {
+                    tx_hash: tx.hash(),
+                    from: timelock_tx.from,
+                    recipient: timelock_tx.recipient,
+                    amount: timelock_tx.amount,
+                    unlock_time: timelock_tx.unlock_time,
+                    created_at_height: block_height,
+                };
+
+                timelock_state.add_timelock(timelock)?;
+                Ok(())
+            }
+
+            coinject_core::Transaction::Escrow(escrow_tx) => {
+                match &escrow_tx.escrow_type {
+                    EscrowType::Create { recipient, arbiter, amount, timeout, conditions_hash } => {
+                        // Validate sender has sufficient balance
+                        let sender_balance = state.get_balance(&escrow_tx.from);
+                        if sender_balance < amount + escrow_tx.fee {
+                            return Err(format!("Insufficient balance for escrow: has {}, needs {}",
+                                sender_balance, amount + escrow_tx.fee));
+                        }
+
+                        // Deduct from sender
+                        state.set_balance(&escrow_tx.from, sender_balance - amount - escrow_tx.fee)
+                            .map_err(|e| format!("Failed to set sender balance: {}", e))?;
+                        state.set_nonce(&escrow_tx.from, escrow_tx.nonce + 1)
+                            .map_err(|e| format!("Failed to set sender nonce: {}", e))?;
+
+                        // Create escrow entry
+                        let escrow = Escrow {
+                            escrow_id: escrow_tx.escrow_id,
+                            sender: escrow_tx.from,
+                            recipient: *recipient,
+                            arbiter: *arbiter,
+                            amount: *amount,
+                            timeout: *timeout,
+                            conditions_hash: *conditions_hash,
+                            status: EscrowStatus::Active,
+                            created_at_height: block_height,
+                            resolved_at_height: None,
+                        };
+
+                        escrow_state.create_escrow(escrow)?;
+                        Ok(())
+                    }
+
+                    EscrowType::Release => {
+                        let escrow = escrow_state.get_escrow(&escrow_tx.escrow_id)
+                            .ok_or("Escrow not found".to_string())?;
+
+                        if !escrow_state.can_release(&escrow_tx.escrow_id, &escrow_tx.from) {
+                            return Err("Not authorized to release escrow".to_string());
+                        }
+
+                        // Credit recipient
+                        let recipient_balance = state.get_balance(&escrow.recipient);
+                        state.set_balance(&escrow.recipient, recipient_balance + escrow.amount)
+                            .map_err(|e| format!("Failed to set recipient balance: {}", e))?;
+
+                        // Update escrow status
+                        escrow_state.update_escrow_status(&escrow_tx.escrow_id, EscrowStatus::Released, Some(block_height))?;
+                        Ok(())
+                    }
+
+                    EscrowType::Refund => {
+                        let escrow = escrow_state.get_escrow(&escrow_tx.escrow_id)
+                            .ok_or("Escrow not found".to_string())?;
+
+                        if !escrow_state.can_refund(&escrow_tx.escrow_id, &escrow_tx.from) {
+                            return Err("Not authorized to refund escrow".to_string());
+                        }
+
+                        // Credit sender (refund)
+                        let sender_balance = state.get_balance(&escrow.sender);
+                        state.set_balance(&escrow.sender, sender_balance + escrow.amount)
+                            .map_err(|e| format!("Failed to set sender balance: {}", e))?;
+
+                        // Update escrow status
+                        escrow_state.update_escrow_status(&escrow_tx.escrow_id, EscrowStatus::Refunded, Some(block_height))?;
+                        Ok(())
+                    }
+                }
+            }
+
+            coinject_core::Transaction::Channel(channel_tx) => {
+                match &channel_tx.channel_type {
+                    ChannelType::Open { participant_a, participant_b, deposit_a, deposit_b, timeout } => {
+                        // Validate initiator has sufficient balance for their deposit
+                        let initiator_balance = state.get_balance(&channel_tx.from);
+                        let initiator_deposit = if &channel_tx.from == participant_a { *deposit_a } else { *deposit_b };
+
+                        if initiator_balance < initiator_deposit + channel_tx.fee {
+                            return Err(format!("Insufficient balance for channel: has {}, needs {}",
+                                initiator_balance, initiator_deposit + channel_tx.fee));
+                        }
+
+                        // Deduct initiator's deposit
+                        state.set_balance(&channel_tx.from, initiator_balance - initiator_deposit - channel_tx.fee)
+                            .map_err(|e| format!("Failed to set initiator balance: {}", e))?;
+                        state.set_nonce(&channel_tx.from, channel_tx.nonce + 1)
+                            .map_err(|e| format!("Failed to set initiator nonce: {}", e))?;
+
+                        // Create channel entry
+                        let channel = Channel {
+                            channel_id: channel_tx.channel_id,
+                            participant_a: *participant_a,
+                            participant_b: *participant_b,
+                            deposit_a: *deposit_a,
+                            deposit_b: *deposit_b,
+                            balance_a: *deposit_a,
+                            balance_b: *deposit_b,
+                            sequence: 0,
+                            dispute_timeout: *timeout,
+                            status: ChannelStatus::Open,
+                            opened_at_height: block_height,
+                            closed_at_height: None,
+                            dispute_started_at: None,
+                        };
+
+                        channel_state.open_channel(channel)?;
+                        Ok(())
+                    }
+
+                    ChannelType::Update { sequence, balance_a, balance_b } => {
+                        channel_state.update_channel_state(&channel_tx.channel_id, *sequence, *balance_a, *balance_b)?;
+                        Ok(())
+                    }
+
+                    ChannelType::CooperativeClose { final_balance_a, final_balance_b } => {
+                        let channel = channel_state.get_channel(&channel_tx.channel_id)
+                            .ok_or("Channel not found".to_string())?;
+
+                        // Credit both participants
+                        let balance_a = state.get_balance(&channel.participant_a);
+                        state.set_balance(&channel.participant_a, balance_a + final_balance_a)
+                            .map_err(|e| format!("Failed to set participant A balance: {}", e))?;
+
+                        let balance_b = state.get_balance(&channel.participant_b);
+                        state.set_balance(&channel.participant_b, balance_b + final_balance_b)
+                            .map_err(|e| format!("Failed to set participant B balance: {}", e))?;
+
+                        // Close channel
+                        channel_state.close_cooperative(&channel_tx.channel_id, *final_balance_a, *final_balance_b, block_height)?;
+                        Ok(())
+                    }
+
+                    ChannelType::UnilateralClose { sequence, balance_a, balance_b, .. } => {
+                        let channel = channel_state.get_channel(&channel_tx.channel_id)
+                            .ok_or("Channel not found".to_string())?;
+
+                        // Start dispute
+                        channel_state.start_dispute(&channel_tx.channel_id, *sequence, *balance_a, *balance_b)?;
+                        Ok(())
+                    }
+                }
             }
         }
     }
@@ -628,6 +812,9 @@ impl CoinjectNode {
         miner: Arc<RwLock<Miner>>,
         chain: Arc<ChainState>,
         state: Arc<AccountState>,
+        timelock_state: Arc<TimeLockState>,
+        escrow_state: Arc<EscrowState>,
+        channel_state: Arc<ChannelState>,
         tx_pool: Arc<RwLock<TransactionPool>>,
         network_tx: mpsc::UnboundedSender<NetworkCommand>,
     ) {
@@ -643,10 +830,11 @@ impl CoinjectNode {
 
             // Select transactions from pool (top 100 by fee)
             let pool = tx_pool.read().await;
+            let pool_size = pool.len();
             let transactions = pool.get_top_n(100);
             drop(pool);
 
-            println!("   Including {} transactions", transactions.len());
+            println!("   Pool size: {}, Fetching top 100, Got: {} transactions", pool_size, transactions.len());
 
             // Mine block
             let mut miner_lock = miner.write().await;
@@ -664,7 +852,7 @@ impl CoinjectNode {
                 }
 
                 // Apply block transactions to state
-                let applied_txs = match Self::apply_block_transactions(&block, &state) {
+                let applied_txs = match Self::apply_block_transactions(&block, &state, &timelock_state, &escrow_state, &channel_state) {
                     Ok(txs) => txs,
                     Err(e) => {
                         println!("❌ Failed to apply mined block transactions: {}", e);

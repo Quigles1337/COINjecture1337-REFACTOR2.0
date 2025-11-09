@@ -127,6 +127,113 @@ enum TransactionCommands {
         /// Transaction hash (hex)
         tx_hash: String,
     },
+
+    /// Create an escrow
+    EscrowCreate {
+        /// Sender account name or address
+        #[arg(short, long)]
+        from: String,
+
+        /// Recipient address (who receives on release)
+        to: String,
+
+        /// Optional arbiter address
+        #[arg(short, long)]
+        arbiter: Option<String>,
+
+        /// Amount to escrow
+        amount: u128,
+
+        /// Timeout in seconds from now
+        #[arg(short = 't', long)]
+        timeout: i64,
+
+        /// Conditions description
+        #[arg(short, long)]
+        conditions: String,
+    },
+
+    /// Release escrowed funds
+    EscrowRelease {
+        /// Releaser account name or address (must be recipient or arbiter)
+        #[arg(short, long)]
+        from: String,
+
+        /// Escrow ID (hex)
+        escrow_id: String,
+    },
+
+    /// Refund escrowed funds
+    EscrowRefund {
+        /// Refunder account name or address (must be sender or arbiter)
+        #[arg(short, long)]
+        from: String,
+
+        /// Escrow ID (hex)
+        escrow_id: String,
+    },
+
+    /// Open a payment channel
+    ChannelOpen {
+        /// Opener account name or address (participant A)
+        #[arg(short, long)]
+        from: String,
+
+        /// Participant B address
+        to: String,
+
+        /// Deposit from participant A
+        #[arg(short = 'a', long)]
+        deposit_a: u128,
+
+        /// Deposit from participant B
+        #[arg(short = 'b', long)]
+        deposit_b: u128,
+
+        /// Timeout in seconds
+        #[arg(short = 't', long)]
+        timeout: i64,
+    },
+
+    /// Update payment channel state
+    ChannelUpdate {
+        /// Account name or address
+        #[arg(short, long)]
+        from: String,
+
+        /// Channel ID (hex)
+        channel_id: String,
+
+        /// Sequence number
+        #[arg(short, long)]
+        sequence: u64,
+
+        /// Balance for participant A
+        #[arg(short = 'a', long)]
+        balance_a: u128,
+
+        /// Balance for participant B
+        #[arg(short = 'b', long)]
+        balance_b: u128,
+    },
+
+    /// Close a payment channel (cooperative)
+    ChannelClose {
+        /// Account name or address
+        #[arg(short, long)]
+        from: String,
+
+        /// Channel ID (hex)
+        channel_id: String,
+
+        /// Final balance for participant A
+        #[arg(short = 'a', long)]
+        final_balance_a: u128,
+
+        /// Final balance for participant B
+        #[arg(short = 'b', long)]
+        final_balance_b: u128,
+    },
 }
 
 #[derive(Subcommand)]
@@ -221,6 +328,72 @@ async fn handle_transaction_command(
         }
         TransactionCommands::Status { tx_hash } => {
             transaction::get_transaction_status(&tx_hash, client).await?
+        }
+        TransactionCommands::EscrowCreate {
+            from,
+            to,
+            arbiter,
+            amount,
+            timeout,
+            conditions,
+        } => {
+            transaction::create_escrow(
+                &from,
+                &to,
+                arbiter.as_deref(),
+                amount,
+                timeout,
+                &conditions,
+                client,
+            )
+            .await?
+        }
+        TransactionCommands::EscrowRelease { from, escrow_id } => {
+            transaction::release_escrow(&from, &escrow_id, client).await?
+        }
+        TransactionCommands::EscrowRefund { from, escrow_id } => {
+            transaction::refund_escrow(&from, &escrow_id, client).await?
+        }
+        TransactionCommands::ChannelOpen {
+            from,
+            to,
+            deposit_a,
+            deposit_b,
+            timeout,
+        } => {
+            transaction::open_channel(&from, &to, deposit_a, deposit_b, timeout, client).await?
+        }
+        TransactionCommands::ChannelUpdate {
+            from,
+            channel_id,
+            sequence,
+            balance_a,
+            balance_b,
+        } => {
+            transaction::update_channel(
+                &from,
+                &channel_id,
+                sequence,
+                balance_a,
+                balance_b,
+                client,
+            )
+            .await?
+        }
+        TransactionCommands::ChannelClose {
+            from,
+            channel_id,
+            final_balance_a,
+            final_balance_b,
+        } => {
+            transaction::close_channel(
+                &from,
+                &channel_id,
+                final_balance_a,
+                final_balance_b,
+                client,
+            )
+            .await?
         }
     }
     Ok(())

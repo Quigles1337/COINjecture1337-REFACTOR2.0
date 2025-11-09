@@ -359,13 +359,22 @@ impl CoinjectRpcServer for RpcServerImpl {
 
         // Add to mempool
         let mut pool = self.state.tx_pool.write().await;
-        match pool.add(tx) {
-            Ok(hash) => Ok(hex::encode(hash.as_bytes())),
-            Err(e) => Err(ErrorObjectOwned::owned(
-                INVALID_PARAMS,
-                format!("Failed to add transaction to pool: {}", e),
-                None::<()>,
-            )),
+        match pool.add(tx.clone()) {
+            Ok(hash) => {
+                let pool_size = pool.len();
+                drop(pool);
+                println!("✅ Transaction added to pool! Hash: {}, Pool size: {}", hex::encode(hash.as_bytes()), pool_size);
+                Ok(hex::encode(hash.as_bytes()))
+            }
+            Err(e) => {
+                drop(pool);
+                println!("❌ Failed to add transaction to pool: {}", e);
+                Err(ErrorObjectOwned::owned(
+                    INVALID_PARAMS,
+                    format!("Failed to add transaction to pool: {}", e),
+                    None::<()>,
+                ))
+            }
         }
     }
 
