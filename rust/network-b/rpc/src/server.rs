@@ -3,7 +3,10 @@
 
 use coinject_core::{Address, Balance, Block, BlockHeader, Hash, Transaction};
 use coinject_mempool::{MarketplaceStats, ProblemSubmission, ProblemMarketplace, TransactionPool};
-use coinject_state::AccountState;
+use coinject_state::{
+    AccountState, TimeLockState, TimeLock, EscrowState, Escrow,
+    ChannelState, Channel
+};
 use jsonrpsee::{
     core::{async_trait, RpcResult},
     proc_macros::rpc,
@@ -65,6 +68,49 @@ pub struct ProblemInfo {
     pub expires_at: i64,
 }
 
+/// TimeLock information response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeLockInfo {
+    pub tx_hash: String,
+    pub from: String,
+    pub recipient: String,
+    pub amount: Balance,
+    pub unlock_time: i64,
+    pub created_at_height: u64,
+}
+
+/// Escrow information response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EscrowInfo {
+    pub escrow_id: String,
+    pub sender: String,
+    pub recipient: String,
+    pub arbiter: Option<String>,
+    pub amount: Balance,
+    pub timeout: i64,
+    pub conditions_hash: String,
+    pub status: String,
+    pub created_at_height: u64,
+    pub resolved_at_height: Option<u64>,
+}
+
+/// Channel information response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelInfo {
+    pub channel_id: String,
+    pub participant_a: String,
+    pub participant_b: String,
+    pub deposit_a: Balance,
+    pub deposit_b: Balance,
+    pub balance_a: Balance,
+    pub balance_b: Balance,
+    pub sequence: u64,
+    pub dispute_timeout: i64,
+    pub status: String,
+    pub opened_at_height: u64,
+    pub closed_at_height: Option<u64>,
+}
+
 /// JSON-RPC API definition
 #[rpc(server, client)]
 pub trait CoinjectRpc {
@@ -115,11 +161,46 @@ pub trait CoinjectRpc {
     /// Get marketplace statistics
     #[method(name = "marketplace_getStats")]
     async fn get_marketplace_stats(&self) -> RpcResult<MarketplaceStats>;
+
+    /// Get timelocks for a recipient address
+    #[method(name = "timelock_getByRecipient")]
+    async fn get_timelocks_by_recipient(&self, recipient: String) -> RpcResult<Vec<TimeLockInfo>>;
+
+    /// Get all unlocked timelocks
+    #[method(name = "timelock_getUnlocked")]
+    async fn get_unlocked_timelocks(&self) -> RpcResult<Vec<TimeLockInfo>>;
+
+    /// Get escrows by sender address
+    #[method(name = "escrow_getBySender")]
+    async fn get_escrows_by_sender(&self, sender: String) -> RpcResult<Vec<EscrowInfo>>;
+
+    /// Get escrows by recipient address
+    #[method(name = "escrow_getByRecipient")]
+    async fn get_escrows_by_recipient(&self, recipient: String) -> RpcResult<Vec<EscrowInfo>>;
+
+    /// Get active escrows
+    #[method(name = "escrow_getActive")]
+    async fn get_active_escrows(&self) -> RpcResult<Vec<EscrowInfo>>;
+
+    /// Get channels for an address
+    #[method(name = "channel_getByAddress")]
+    async fn get_channels_by_address(&self, address: String) -> RpcResult<Vec<ChannelInfo>>;
+
+    /// Get open channels
+    #[method(name = "channel_getOpen")]
+    async fn get_open_channels(&self) -> RpcResult<Vec<ChannelInfo>>;
+
+    /// Get disputed channels
+    #[method(name = "channel_getDisputed")]
+    async fn get_disputed_channels(&self) -> RpcResult<Vec<ChannelInfo>>;
 }
 
 /// RPC server state
 pub struct RpcServerState {
     pub account_state: Arc<AccountState>,
+    pub timelock_state: Arc<TimeLockState>,
+    pub escrow_state: Arc<EscrowState>,
+    pub channel_state: Arc<ChannelState>,
     pub blockchain: Arc<dyn BlockchainReader>,
     pub marketplace: Arc<RwLock<ProblemMarketplace>>,
     pub tx_pool: Arc<RwLock<TransactionPool>>,
@@ -174,6 +255,52 @@ impl RpcServerImpl {
         let mut hash_bytes = [0u8; 32];
         hash_bytes.copy_from_slice(&bytes);
         Ok(Hash::from_bytes(hash_bytes))
+    }
+
+    /// Convert TimeLock to TimeLockInfo
+    fn timelock_to_info(&self, timelock: &TimeLock) -> TimeLockInfo {
+        TimeLockInfo {
+            tx_hash: hex::encode(timelock.tx_hash.as_bytes()),
+            from: hex::encode(timelock.from.as_bytes()),
+            recipient: hex::encode(timelock.recipient.as_bytes()),
+            amount: timelock.amount,
+            unlock_time: timelock.unlock_time,
+            created_at_height: timelock.created_at_height,
+        }
+    }
+
+    /// Convert Escrow to EscrowInfo
+    fn escrow_to_info(&self, escrow: &Escrow) -> EscrowInfo {
+        EscrowInfo {
+            escrow_id: hex::encode(escrow.escrow_id.as_bytes()),
+            sender: hex::encode(escrow.sender.as_bytes()),
+            recipient: hex::encode(escrow.recipient.as_bytes()),
+            arbiter: escrow.arbiter.as_ref().map(|a| hex::encode(a.as_bytes())),
+            amount: escrow.amount,
+            timeout: escrow.timeout,
+            conditions_hash: hex::encode(escrow.conditions_hash.as_bytes()),
+            status: format!("{:?}", escrow.status),
+            created_at_height: escrow.created_at_height,
+            resolved_at_height: escrow.resolved_at_height,
+        }
+    }
+
+    /// Convert Channel to ChannelInfo
+    fn channel_to_info(&self, channel: &Channel) -> ChannelInfo {
+        ChannelInfo {
+            channel_id: hex::encode(channel.channel_id.as_bytes()),
+            participant_a: hex::encode(channel.participant_a.as_bytes()),
+            participant_b: hex::encode(channel.participant_b.as_bytes()),
+            deposit_a: channel.deposit_a,
+            deposit_b: channel.deposit_b,
+            balance_a: channel.balance_a,
+            balance_b: channel.balance_b,
+            sequence: channel.sequence,
+            dispute_timeout: channel.dispute_timeout,
+            status: format!("{:?}", channel.status),
+            opened_at_height: channel.opened_at_height,
+            closed_at_height: channel.closed_at_height,
+        }
     }
 
     /// Convert ProblemSubmission to ProblemInfo
@@ -318,6 +445,50 @@ impl CoinjectRpcServer for RpcServerImpl {
     async fn get_marketplace_stats(&self) -> RpcResult<MarketplaceStats> {
         let marketplace = self.state.marketplace.read().await;
         Ok(marketplace.get_stats())
+    }
+
+    async fn get_timelocks_by_recipient(&self, recipient: String) -> RpcResult<Vec<TimeLockInfo>> {
+        let addr = self.parse_address(&recipient)?;
+        let timelocks = self.state.timelock_state.get_timelocks_for_recipient(&addr);
+        Ok(timelocks.into_iter().map(|tl| self.timelock_to_info(&tl)).collect())
+    }
+
+    async fn get_unlocked_timelocks(&self) -> RpcResult<Vec<TimeLockInfo>> {
+        let timelocks = self.state.timelock_state.get_unlocked_timelocks();
+        Ok(timelocks.into_iter().map(|tl| self.timelock_to_info(&tl)).collect())
+    }
+
+    async fn get_escrows_by_sender(&self, sender: String) -> RpcResult<Vec<EscrowInfo>> {
+        let addr = self.parse_address(&sender)?;
+        let escrows = self.state.escrow_state.get_escrows_by_sender(&addr);
+        Ok(escrows.into_iter().map(|e| self.escrow_to_info(&e)).collect())
+    }
+
+    async fn get_escrows_by_recipient(&self, recipient: String) -> RpcResult<Vec<EscrowInfo>> {
+        let addr = self.parse_address(&recipient)?;
+        let escrows = self.state.escrow_state.get_escrows_by_recipient(&addr);
+        Ok(escrows.into_iter().map(|e| self.escrow_to_info(&e)).collect())
+    }
+
+    async fn get_active_escrows(&self) -> RpcResult<Vec<EscrowInfo>> {
+        let escrows = self.state.escrow_state.get_active_escrows();
+        Ok(escrows.into_iter().map(|e| self.escrow_to_info(&e)).collect())
+    }
+
+    async fn get_channels_by_address(&self, address: String) -> RpcResult<Vec<ChannelInfo>> {
+        let addr = self.parse_address(&address)?;
+        let channels = self.state.channel_state.get_channels_for_address(&addr);
+        Ok(channels.into_iter().map(|c| self.channel_to_info(&c)).collect())
+    }
+
+    async fn get_open_channels(&self) -> RpcResult<Vec<ChannelInfo>> {
+        let channels = self.state.channel_state.get_open_channels();
+        Ok(channels.into_iter().map(|c| self.channel_to_info(&c)).collect())
+    }
+
+    async fn get_disputed_channels(&self) -> RpcResult<Vec<ChannelInfo>> {
+        let channels = self.state.channel_state.get_disputed_channels();
+        Ok(channels.into_iter().map(|c| self.channel_to_info(&c)).collect())
     }
 }
 

@@ -10,7 +10,7 @@ use coinject_core::Address;
 use coinject_mempool::{ProblemMarketplace, TransactionPool};
 use coinject_network::{NetworkConfig, NetworkEvent, NetworkService};
 use coinject_rpc::{RpcServer, RpcServerState};
-use coinject_state::AccountState;
+use coinject_state::{AccountState, TimeLockState, EscrowState, ChannelState};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -71,6 +71,12 @@ impl CoinjectNode {
         // Initialize account state
         println!("💰 Initializing account state...");
         let state = Arc::new(AccountState::new(config.state_db_path())?);
+
+        // Initialize advanced transaction state managers (sharing same DB with different prefixes)
+        let state_db = Arc::new(sled::open(config.state_db_path())?);
+        let timelock_state = Arc::new(TimeLockState::new(Arc::clone(&state_db)));
+        let escrow_state = Arc::new(EscrowState::new(Arc::clone(&state_db)));
+        let channel_state = Arc::new(ChannelState::new(Arc::clone(&state_db)));
 
         // Apply genesis if this is a new chain
         if best_height == 0 {
@@ -166,6 +172,9 @@ impl CoinjectNode {
 
         let rpc_state = Arc::new(RpcServerState {
             account_state: Arc::clone(&self.state),
+            timelock_state: Arc::clone(&timelock_state),
+            escrow_state: Arc::clone(&escrow_state),
+            channel_state: Arc::clone(&channel_state),
             blockchain: Arc::clone(&self.chain) as Arc<dyn coinject_rpc::BlockchainReader>,
             marketplace: Arc::clone(&self.marketplace),
             tx_pool: Arc::clone(&self.tx_pool),
