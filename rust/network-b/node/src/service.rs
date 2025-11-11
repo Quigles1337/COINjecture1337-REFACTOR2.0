@@ -75,13 +75,13 @@ impl CoinjectNode {
 
         // Initialize account state and advanced transaction states (sharing same DB)
         println!("💰 Initializing account state...");
-        let state_db = Arc::new(sled::open(config.state_db_path())?);
-        let state = Arc::new(AccountState::from_db((*state_db).clone()));
-        let timelock_state = Arc::new(TimeLockState::new(Arc::clone(&state_db)));
-        let escrow_state = Arc::new(EscrowState::new(Arc::clone(&state_db)));
-        let channel_state = Arc::new(ChannelState::new(Arc::clone(&state_db)));
-        let trustline_state = Arc::new(TrustLineState::new(Arc::clone(&state_db)));
-        let dimensional_pool_state = Arc::new(DimensionalPoolState::new(Arc::clone(&state_db)));
+        let state_db = Arc::new(redb::Database::create(config.state_db_path())?);
+        let state = Arc::new(AccountState::from_db(Arc::clone(&state_db)));
+        let timelock_state = Arc::new(TimeLockState::new(Arc::clone(&state_db))?);
+        let escrow_state = Arc::new(EscrowState::new(Arc::clone(&state_db))?);
+        let channel_state = Arc::new(ChannelState::new(Arc::clone(&state_db))?);
+        let trustline_state = Arc::new(TrustLineState::new(Arc::clone(&state_db))?);
+        let dimensional_pool_state = Arc::new(DimensionalPoolState::new(Arc::clone(&state_db))?);
 
         // Apply genesis if this is a new chain
         if best_height == 0 {

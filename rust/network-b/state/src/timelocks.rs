@@ -3,8 +3,11 @@
 
 use coinject_core::{Address, Balance, Hash};
 use serde::{Deserialize, Serialize};
-use sled::Db;
+use redb::{Database, ReadableTable, TableDefinition};
 use std::sync::Arc;
+
+// Table definition for timelocks
+const TIMELOCKS_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("timelocks");
 
 /// Time-locked balance entry
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,13 +28,20 @@ pub struct TimeLock {
 
 /// Time-lock state management
 pub struct TimeLockState {
-    db: Arc<Db>,
+    db: Arc<Database>,
 }
 
 impl TimeLockState {
     /// Create new time-lock state manager
-    pub fn new(db: Arc<Db>) -> Self {
-        TimeLockState { db }
+    pub fn new(db: Arc<Database>) -> Result<Self, redb::Error> {
+        // Initialize table
+        let write_txn = db.begin_write()?;
+        {
+            let _ = write_txn.open_table(TIMELOCKS_TABLE)?;
+        }
+        write_txn.commit()?;
+
+        Ok(TimeLockState { db })
     }
 
     /// Add a new time-lock
@@ -40,13 +50,16 @@ impl TimeLockState {
         let value = bincode::serialize(&timelock)
             .map_err(|e| format!("Failed to serialize timelock: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to insert timelock: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self.db.begin_write()
+            .map_err(|e| format!("Failed to begin write: {}", e))?;
+        {
+            let mut table = write_txn.open_table(TIMELOCKS_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table.insert(&key[..], value.as_slice())
+                .map_err(|e| format!("Failed to insert timelock: {}", e))?;
+        }
+        write_txn.commit()
+            .map_err(|e| format!("Failed to commit: {}", e))?;
 
         Ok(())
     }
@@ -54,21 +67,27 @@ impl TimeLockState {
     /// Get time-lock by transaction hash
     pub fn get_timelock(&self, tx_hash: &Hash) -> Option<TimeLock> {
         let key = Self::make_key(tx_hash);
-        self.db.get(key).ok()?.map(|bytes| {
-            bincode::deserialize(&bytes).ok()
-        })?
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(TIMELOCKS_TABLE).ok()?;
+
+        let bytes = table.get(&key[..]).ok()??;
+        bincode::deserialize(bytes.value()).ok()
     }
 
     /// Remove time-lock (after unlocking)
     pub fn remove_timelock(&self, tx_hash: &Hash) -> Result<(), String> {
         let key = Self::make_key(tx_hash);
-        self.db
-            .remove(key)
-            .map_err(|e| format!("Failed to remove timelock: {}", e))?;
 
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self.db.begin_write()
+            .map_err(|e| format!("Failed to begin write: {}", e))?;
+        {
+            let mut table = write_txn.open_table(TIMELOCKS_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table.remove(&key[..])
+                .map_err(|e| format!("Failed to remove timelock: {}", e))?;
+        }
+        write_txn.commit()
+            .map_err(|e| format!("Failed to commit: {}", e))?;
 
         Ok(())
     }
@@ -77,11 +96,15 @@ impl TimeLockState {
     pub fn get_timelocks_for_recipient(&self, recipient: &Address) -> Vec<TimeLock> {
         let mut timelocks = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(timelock) = bincode::deserialize::<TimeLock>(&value) {
-                    if timelock.recipient == *recipient {
-                        timelocks.push(timelock);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(TIMELOCKS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(timelock) = bincode::deserialize::<TimeLock>(value.value()) {
+                            if timelock.recipient == *recipient {
+                                timelocks.push(timelock);
+                            }
+                        }
                     }
                 }
             }
@@ -95,11 +118,15 @@ impl TimeLockState {
         let now = chrono::Utc::now().timestamp();
         let mut unlocked = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(timelock) = bincode::deserialize::<TimeLock>(&value) {
-                    if timelock.unlock_time <= now {
-                        unlocked.push(timelock);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(TIMELOCKS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(timelock) = bincode::deserialize::<TimeLock>(value.value()) {
+                            if timelock.unlock_time <= now {
+                                unlocked.push(timelock);
+                            }
+                        }
                     }
                 }
             }
@@ -123,12 +150,16 @@ impl TimeLockState {
         let now = chrono::Utc::now().timestamp();
         let mut total = 0u128;
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(timelock) = bincode::deserialize::<TimeLock>(&value) {
-                    // Count locks where address is the locker and not yet unlocked
-                    if timelock.from == *address && timelock.unlock_time > now {
-                        total += timelock.amount;
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(TIMELOCKS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(timelock) = bincode::deserialize::<TimeLock>(value.value()) {
+                            // Count locks where address is the locker and not yet unlocked
+                            if timelock.from == *address && timelock.unlock_time > now {
+                                total += timelock.amount;
+                            }
+                        }
                     }
                 }
             }
@@ -153,8 +184,9 @@ mod tests {
     #[test]
     fn test_timelock_add_and_get() {
         let dir = tempdir().unwrap();
-        let db = Arc::new(sled::open(dir.path()).unwrap());
-        let state = TimeLockState::new(db);
+        let db_path = dir.path().join("test.redb");
+        let db = Arc::new(Database::create(&db_path).unwrap());
+        let state = TimeLockState::new(db).unwrap();
 
         let timelock = TimeLock {
             tx_hash: Hash::from_bytes([1u8; 32]),
@@ -175,8 +207,9 @@ mod tests {
     #[test]
     fn test_unlocked_timelocks() {
         let dir = tempdir().unwrap();
-        let db = Arc::new(sled::open(dir.path()).unwrap());
-        let state = TimeLockState::new(db);
+        let db_path = dir.path().join("test.redb");
+        let db = Arc::new(Database::create(&db_path).unwrap());
+        let state = TimeLockState::new(db).unwrap();
 
         // Create unlocked timelock (in the past)
         let unlocked_timelock = TimeLock {

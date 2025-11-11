@@ -1,68 +1,104 @@
-// Account-based state management with sled database
+// Account-based state management with redb database (pure Rust, ACID-compliant)
 use coinject_core::{Address, Balance};
-use sled::{Db, IVec};
+use redb::{Database, TableDefinition};
 use std::path::Path;
+use std::sync::Arc;
+
+// Table definitions for redb (using fixed-size keys for addresses)
+const BALANCES_TABLE: TableDefinition<&[u8; 32], u128> = TableDefinition::new("balances");
+const NONCES_TABLE: TableDefinition<&[u8; 32], u64> = TableDefinition::new("nonces");
 
 pub struct AccountState {
-    db: Db,
+    db: Arc<Database>,
 }
 
 impl AccountState {
     /// Open or create the state database
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, sled::Error> {
-        let db = sled::open(path)?;
-        Ok(AccountState { db })
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, redb::Error> {
+        let db = Database::create(path)?;
+
+        // Initialize tables
+        let write_txn = db.begin_write()?;
+        {
+            let _ = write_txn.open_table(BALANCES_TABLE)?;
+            let _ = write_txn.open_table(NONCES_TABLE)?;
+        }
+        write_txn.commit()?;
+
+        Ok(AccountState { db: Arc::new(db) })
     }
 
     /// Create AccountState from an existing database
-    pub fn from_db(db: Db) -> Self {
+    pub fn from_db(db: Arc<Database>) -> Self {
         AccountState { db }
     }
 
     /// Get account balance
     pub fn get_balance(&self, address: &Address) -> Balance {
-        let key = Self::balance_key(address);
-        self.db
-            .get(&key)
+        let read_txn = match self.db.begin_read() {
+            Ok(txn) => txn,
+            Err(_) => return 0,
+        };
+
+        let table = match read_txn.open_table(BALANCES_TABLE) {
+            Ok(t) => t,
+            Err(_) => return 0,
+        };
+
+        table
+            .get(address.as_bytes())
             .ok()
             .flatten()
-            .and_then(|bytes| Self::bytes_to_balance(&bytes))
+            .map(|v| v.value())
             .unwrap_or(0)
     }
 
     /// Set account balance
-    pub fn set_balance(&self, address: &Address, balance: Balance) -> Result<(), sled::Error> {
-        let key = Self::balance_key(address);
-        let value = balance.to_le_bytes();
-        self.db.insert(&key, &value[..])?;
+    pub fn set_balance(&self, address: &Address, balance: Balance) -> Result<(), StateError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(BALANCES_TABLE)?;
+            table.insert(address.as_bytes(), balance)?;
+        }
+        write_txn.commit()?;
         Ok(())
     }
 
     /// Get account nonce (for transaction replay protection)
     pub fn get_nonce(&self, address: &Address) -> u64 {
-        let key = Self::nonce_key(address);
-        self.db
-            .get(&key)
+        let read_txn = match self.db.begin_read() {
+            Ok(txn) => txn,
+            Err(_) => return 0,
+        };
+
+        let table = match read_txn.open_table(NONCES_TABLE) {
+            Ok(t) => t,
+            Err(_) => return 0,
+        };
+
+        table
+            .get(address.as_bytes())
             .ok()
             .flatten()
-            .and_then(|bytes| Self::bytes_to_u64(&bytes))
+            .map(|v| v.value())
             .unwrap_or(0)
     }
 
     /// Set account nonce
-    pub fn set_nonce(&self, address: &Address, nonce: u64) -> Result<(), sled::Error> {
-        let key = Self::nonce_key(address);
-        let value = nonce.to_le_bytes();
-        self.db.insert(&key, &value[..])?;
+    pub fn set_nonce(&self, address: &Address, nonce: u64) -> Result<(), StateError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(NONCES_TABLE)?;
+            table.insert(address.as_bytes(), nonce)?;
+        }
+        write_txn.commit()?;
         Ok(())
     }
 
     /// Increment account nonce
-    pub fn increment_nonce(&self, address: &Address) -> Result<u64, sled::Error> {
-        let key = Self::nonce_key(address);
+    pub fn increment_nonce(&self, address: &Address) -> Result<u64, StateError> {
         let new_nonce = self.get_nonce(address) + 1;
-        let value = new_nonce.to_le_bytes();
-        self.db.insert(&key, &value[..])?;
+        self.set_nonce(address, new_nonce)?;
         Ok(new_nonce)
     }
 
@@ -82,62 +118,38 @@ impl AccountState {
             });
         }
 
-        // Update balances
-        self.set_balance(from, from_balance - amount)?;
         let to_balance = self.get_balance(to);
-        self.set_balance(to, to_balance + amount)?;
+
+        // ACID transaction: both updates or neither
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(BALANCES_TABLE)?;
+            table.insert(from.as_bytes(), from_balance - amount)?;
+            table.insert(to.as_bytes(), to_balance + amount)?;
+        }
+        write_txn.commit()?;
 
         Ok(())
     }
 
     /// Apply a batch of balance changes atomically
-    pub fn apply_batch(&self, changes: &[(Address, Balance)]) -> Result<(), sled::Error> {
-        let mut batch = sled::Batch::default();
-        for (address, balance) in changes {
-            let key = Self::balance_key(address);
-            let value = balance.to_le_bytes();
-            batch.insert(&key[..], &value[..]);
+    pub fn apply_batch(&self, changes: &[(Address, Balance)]) -> Result<(), StateError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(BALANCES_TABLE)?;
+            for (address, balance) in changes {
+                table.insert(address.as_bytes(), *balance)?;
+            }
         }
-        self.db.apply_batch(batch)?;
+        write_txn.commit()?;
         Ok(())
     }
 
-    /// Flush all pending writes to disk
-    pub fn flush(&self) -> Result<usize, sled::Error> {
-        self.db.flush()
-    }
-
-    // Helper functions
-    fn balance_key(address: &Address) -> Vec<u8> {
-        let mut key = vec![0x01]; // Prefix for balance keys
-        key.extend_from_slice(address.as_bytes());
-        key
-    }
-
-    fn nonce_key(address: &Address) -> Vec<u8> {
-        let mut key = vec![0x02]; // Prefix for nonce keys
-        key.extend_from_slice(address.as_bytes());
-        key
-    }
-
-    fn bytes_to_balance(bytes: &IVec) -> Option<Balance> {
-        if bytes.len() == 16 {
-            let mut arr = [0u8; 16];
-            arr.copy_from_slice(&bytes[..16]);
-            Some(Balance::from_le_bytes(arr))
-        } else {
-            None
-        }
-    }
-
-    fn bytes_to_u64(bytes: &IVec) -> Option<u64> {
-        if bytes.len() == 8 {
-            let mut arr = [0u8; 8];
-            arr.copy_from_slice(&bytes[..8]);
-            Some(u64::from_le_bytes(arr))
-        } else {
-            None
-        }
+    /// Flush all pending writes to disk (redb auto-flushes on commit)
+    pub fn flush(&self) -> Result<(), StateError> {
+        // redb automatically flushes on transaction commit
+        // This method exists for API compatibility
+        Ok(())
     }
 }
 
@@ -148,14 +160,65 @@ pub enum StateError {
         balance: Balance,
         required: Balance,
     },
-    DatabaseError(sled::Error),
+    DatabaseError(redb::Error),
+    StorageError(redb::StorageError),
+    TableError(redb::TableError),
+    CommitError(redb::CommitError),
+    TransactionError(redb::TransactionError),
 }
 
-impl From<sled::Error> for StateError {
-    fn from(err: sled::Error) -> Self {
+impl From<redb::Error> for StateError {
+    fn from(err: redb::Error) -> Self {
         StateError::DatabaseError(err)
     }
 }
+
+impl From<redb::StorageError> for StateError {
+    fn from(err: redb::StorageError) -> Self {
+        StateError::StorageError(err)
+    }
+}
+
+impl From<redb::TableError> for StateError {
+    fn from(err: redb::TableError) -> Self {
+        StateError::TableError(err)
+    }
+}
+
+impl From<redb::CommitError> for StateError {
+    fn from(err: redb::CommitError) -> Self {
+        StateError::CommitError(err)
+    }
+}
+
+impl From<redb::TransactionError> for StateError {
+    fn from(err: redb::TransactionError) -> Self {
+        StateError::TransactionError(err)
+    }
+}
+
+impl std::fmt::Display for StateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StateError::InsufficientBalance {
+                address,
+                balance,
+                required,
+            } => write!(
+                f,
+                "Insufficient balance for address {:?}: have {}, need {}",
+                address, balance, required
+            ),
+            StateError::DatabaseError(e) => write!(f, "Database error: {}", e),
+            StateError::StorageError(e) => write!(f, "Storage error: {}", e),
+            StateError::TableError(e) => write!(f, "Table error: {}", e),
+            StateError::CommitError(e) => write!(f, "Commit error: {}", e),
+            StateError::TransactionError(e) => write!(f, "Transaction error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for StateError {}
 
 #[cfg(test)]
 mod tests {
@@ -175,7 +238,7 @@ mod tests {
         assert_eq!(state.get_balance(&addr), 1000);
 
         // Cleanup
-        std::fs::remove_dir_all("test_db").ok();
+        std::fs::remove_file("test_db").ok();
     }
 
     #[test]
@@ -195,7 +258,7 @@ mod tests {
         assert_eq!(state.get_balance(&bob), 300);
 
         // Cleanup
-        std::fs::remove_dir_all("test_transfer_db").ok();
+        std::fs::remove_file("test_transfer_db").ok();
     }
 
     #[test]
@@ -209,6 +272,6 @@ mod tests {
         assert_eq!(state.increment_nonce(&addr).unwrap(), 2);
 
         // Cleanup
-        std::fs::remove_dir_all("test_nonce_db").ok();
+        std::fs::remove_file("test_nonce_db").ok();
     }
 }

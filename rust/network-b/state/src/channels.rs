@@ -2,9 +2,12 @@
 // Lightning-style bidirectional payment channels
 
 use coinject_core::{Address, Balance, Hash};
+use redb::{Database, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
-use sled::Db;
 use std::sync::Arc;
+
+// Table definition for redb
+const CHANNELS_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("channels");
 
 /// Payment channel status
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -84,13 +87,20 @@ impl Channel {
 
 /// Payment channel state management
 pub struct ChannelState {
-    db: Arc<Db>,
+    db: Arc<Database>,
 }
 
 impl ChannelState {
     /// Create new channel state manager
-    pub fn new(db: Arc<Db>) -> Self {
-        ChannelState { db }
+    pub fn new(db: Arc<Database>) -> Result<Self, redb::Error> {
+        // Initialize tables
+        let write_txn = db.begin_write()?;
+        {
+            let _ = write_txn.open_table(CHANNELS_TABLE)?;
+        }
+        write_txn.commit()?;
+
+        Ok(ChannelState { db })
     }
 
     /// Open a new payment channel
@@ -109,23 +119,32 @@ impl ChannelState {
         let value = bincode::serialize(&channel)
             .map_err(|e| format!("Failed to serialize channel: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to insert channel: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("Failed to begin write transaction: {}", e))?;
+        {
+            let mut table = write_txn
+                .open_table(CHANNELS_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table
+                .insert(key.as_slice(), value.as_slice())
+                .map_err(|e| format!("Failed to insert channel: {}", e))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         Ok(())
     }
 
     /// Get channel by ID
     pub fn get_channel(&self, channel_id: &Hash) -> Option<Channel> {
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(CHANNELS_TABLE).ok()?;
         let key = Self::make_key(channel_id);
-        self.db.get(key).ok()?.map(|bytes| {
-            bincode::deserialize(&bytes).ok()
-        })?
+        let bytes = table.get(key.as_slice()).ok()??;
+        bincode::deserialize(bytes.value()).ok()
     }
 
     /// Update channel state (for off-chain updates)
@@ -257,11 +276,15 @@ impl ChannelState {
     pub fn get_open_channels(&self) -> Vec<Channel> {
         let mut channels = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(channel) = bincode::deserialize::<Channel>(&value) {
-                    if channel.status == ChannelStatus::Open {
-                        channels.push(channel);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(CHANNELS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(channel) = bincode::deserialize::<Channel>(value.value()) {
+                            if channel.status == ChannelStatus::Open {
+                                channels.push(channel);
+                            }
+                        }
                     }
                 }
             }
@@ -274,11 +297,15 @@ impl ChannelState {
     pub fn get_channels_for_address(&self, address: &Address) -> Vec<Channel> {
         let mut channels = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(channel) = bincode::deserialize::<Channel>(&value) {
-                    if channel.is_participant(address) {
-                        channels.push(channel);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(CHANNELS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(channel) = bincode::deserialize::<Channel>(value.value()) {
+                            if channel.is_participant(address) {
+                                channels.push(channel);
+                            }
+                        }
                     }
                 }
             }
@@ -291,11 +318,15 @@ impl ChannelState {
     pub fn get_disputed_channels(&self) -> Vec<Channel> {
         let mut channels = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(channel) = bincode::deserialize::<Channel>(&value) {
-                    if channel.status == ChannelStatus::InDispute {
-                        channels.push(channel);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(CHANNELS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(channel) = bincode::deserialize::<Channel>(value.value()) {
+                            if channel.status == ChannelStatus::InDispute {
+                                channels.push(channel);
+                            }
+                        }
                     }
                 }
             }
@@ -308,14 +339,18 @@ impl ChannelState {
     pub fn get_locked_in_channels(&self, address: &Address) -> Balance {
         let mut total = 0u128;
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(channel) = bincode::deserialize::<Channel>(&value) {
-                    if channel.status == ChannelStatus::Open {
-                        if channel.participant_a == *address {
-                            total += channel.balance_a;
-                        } else if channel.participant_b == *address {
-                            total += channel.balance_b;
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(CHANNELS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(channel) = bincode::deserialize::<Channel>(value.value()) {
+                            if channel.status == ChannelStatus::Open {
+                                if channel.participant_a == *address {
+                                    total += channel.balance_a;
+                                } else if channel.participant_b == *address {
+                                    total += channel.balance_b;
+                                }
+                            }
                         }
                     }
                 }
@@ -331,13 +366,21 @@ impl ChannelState {
         let value = bincode::serialize(channel)
             .map_err(|e| format!("Failed to serialize channel: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to save channel: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("Failed to begin write transaction: {}", e))?;
+        {
+            let mut table = write_txn
+                .open_table(CHANNELS_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table
+                .insert(key.as_slice(), value.as_slice())
+                .map_err(|e| format!("Failed to save channel: {}", e))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         Ok(())
     }
@@ -358,8 +401,8 @@ mod tests {
     #[test]
     fn test_open_and_get_channel() {
         let dir = tempdir().unwrap();
-        let db = Arc::new(sled::open(dir.path()).unwrap());
-        let state = ChannelState::new(db);
+        let db = Arc::new(Database::create(dir.path().join("channel_test")).unwrap());
+        let state = ChannelState::new(db).unwrap();
 
         let channel = Channel {
             channel_id: Hash::from_bytes([1u8; 32]),
@@ -387,8 +430,8 @@ mod tests {
     #[test]
     fn test_update_channel_state() {
         let dir = tempdir().unwrap();
-        let db = Arc::new(sled::open(dir.path()).unwrap());
-        let state = ChannelState::new(db);
+        let db = Arc::new(Database::create(dir.path().join("channel_update_test")).unwrap());
+        let state = ChannelState::new(db).unwrap();
 
         let channel = Channel {
             channel_id: Hash::from_bytes([1u8; 32]),
@@ -422,8 +465,8 @@ mod tests {
     #[test]
     fn test_cooperative_close() {
         let dir = tempdir().unwrap();
-        let db = Arc::new(sled::open(dir.path()).unwrap());
-        let state = ChannelState::new(db);
+        let db = Arc::new(Database::create(dir.path().join("channel_close_test")).unwrap());
+        let state = ChannelState::new(db).unwrap();
 
         let channel = Channel {
             channel_id: Hash::from_bytes([1u8; 32]),

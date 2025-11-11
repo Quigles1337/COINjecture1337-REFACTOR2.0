@@ -12,8 +12,12 @@
 
 use coinject_core::{Address, Balance, DimensionalPool, Hash};
 use serde::{Deserialize, Serialize};
-use sled::Db;
+use redb::{Database, TableDefinition};
 use std::sync::Arc;
+
+// Table definitions for redb
+const POOL_LIQUIDITY_TABLE: TableDefinition<u8, &[u8]> = TableDefinition::new("pool_liquidity");
+const SWAP_RECORDS_TABLE: TableDefinition<&[u8; 32], &[u8]> = TableDefinition::new("swap_records");
 
 /// Satoshi Constant: η = λ = 1/√2 (critical damping at unit circle)
 pub const SATOSHI_ETA: f64 = 0.7071067811865476; // 1/√2
@@ -77,13 +81,21 @@ pub struct PoolSwapRecord {
 
 /// Dimensional Pool State Manager
 pub struct DimensionalPoolState {
-    db: Arc<Db>,
+    db: Arc<Database>,
 }
 
 impl DimensionalPoolState {
     /// Create new dimensional pool state manager
-    pub fn new(db: Arc<Db>) -> Self {
-        DimensionalPoolState { db }
+    pub fn new(db: Arc<Database>) -> Result<Self, redb::Error> {
+        // Initialize tables
+        let write_txn = db.begin_write()?;
+        {
+            let _ = write_txn.open_table(POOL_LIQUIDITY_TABLE)?;
+            let _ = write_txn.open_table(SWAP_RECORDS_TABLE)?;
+        }
+        write_txn.commit()?;
+
+        Ok(DimensionalPoolState { db })
     }
 
     /// Initialize pools with genesis liquidity
@@ -114,25 +126,30 @@ impl DimensionalPoolState {
 
     /// Get pool liquidity
     pub fn get_pool_liquidity(&self, pool: &DimensionalPool) -> Option<PoolLiquidity> {
-        let key = Self::make_pool_key(pool);
-        self.db.get(key).ok()?.map(|bytes| {
-            bincode::deserialize(&bytes).ok()
-        })?
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(POOL_LIQUIDITY_TABLE).ok()?;
+
+        let pool_key = *pool as u8;
+        let bytes = table.get(pool_key).ok()??;
+        bincode::deserialize(bytes.value()).ok()
     }
 
     /// Save pool liquidity
     fn save_pool_liquidity(&self, pool: &PoolLiquidity) -> Result<(), String> {
-        let key = Self::make_pool_key(&pool.pool);
+        let pool_key = pool.pool as u8;
         let value = bincode::serialize(pool)
             .map_err(|e| format!("Failed to serialize pool: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to insert pool: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self.db.begin_write()
+            .map_err(|e| format!("Failed to begin write: {}", e))?;
+        {
+            let mut table = write_txn.open_table(POOL_LIQUIDITY_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table.insert(pool_key, value.as_slice())
+                .map_err(|e| format!("Failed to insert pool: {}", e))?;
+        }
+        write_txn.commit()
+            .map_err(|e| format!("Failed to commit: {}", e))?;
 
         Ok(())
     }
@@ -183,7 +200,7 @@ impl DimensionalPoolState {
         liquidity_to.liquidity -= amount_out;
         liquidity_to.last_update_height = block_height;
 
-        // Save updated pools
+        // Save updated pools (ACID transaction)
         self.save_pool_liquidity(&liquidity_from)?;
         self.save_pool_liquidity(&liquidity_to)?;
 
@@ -248,27 +265,31 @@ impl DimensionalPoolState {
             block_height,
         };
 
-        let key = Self::make_swap_key(&tx_hash);
+        let key = tx_hash.as_bytes();
         let value = bincode::serialize(&swap_record)
             .map_err(|e| format!("Failed to serialize swap: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to insert swap: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self.db.begin_write()
+            .map_err(|e| format!("Failed to begin write: {}", e))?;
+        {
+            let mut table = write_txn.open_table(SWAP_RECORDS_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table.insert(key, value.as_slice())
+                .map_err(|e| format!("Failed to insert swap: {}", e))?;
+        }
+        write_txn.commit()
+            .map_err(|e| format!("Failed to commit: {}", e))?;
 
         Ok(())
     }
 
     /// Get swap record by transaction hash
     pub fn get_swap_record(&self, tx_hash: &Hash) -> Option<PoolSwapRecord> {
-        let key = Self::make_swap_key(tx_hash);
-        self.db.get(key).ok()?.map(|bytes| {
-            bincode::deserialize(&bytes).ok()
-        })?
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(SWAP_RECORDS_TABLE).ok()?;
+
+        let bytes = table.get(tx_hash.as_bytes()).ok()??;
+        bincode::deserialize(bytes.value()).ok()
     }
 
     /// Get all pool liquidities
@@ -288,19 +309,6 @@ impl DimensionalPoolState {
             .iter()
             .map(|p| p.liquidity)
             .sum()
-    }
-
-    // Key generation helpers
-    fn make_pool_key(pool: &DimensionalPool) -> Vec<u8> {
-        let mut key = b"pool:".to_vec();
-        key.push(*pool as u8);
-        key
-    }
-
-    fn make_swap_key(tx_hash: &Hash) -> Vec<u8> {
-        let mut key = b"swap:".to_vec();
-        key.extend_from_slice(tx_hash.as_bytes());
-        key
     }
 }
 

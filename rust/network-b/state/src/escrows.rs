@@ -2,9 +2,12 @@
 // Multi-party escrows with arbiter support
 
 use coinject_core::{Address, Balance, Hash};
+use redb::{Database, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
-use sled::Db;
 use std::sync::Arc;
+
+// Table definition for redb
+const ESCROWS_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("escrows");
 
 /// Escrow status
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -46,13 +49,20 @@ pub struct Escrow {
 
 /// Escrow state management
 pub struct EscrowState {
-    db: Arc<Db>,
+    db: Arc<Database>,
 }
 
 impl EscrowState {
     /// Create new escrow state manager
-    pub fn new(db: Arc<Db>) -> Self {
-        EscrowState { db }
+    pub fn new(db: Arc<Database>) -> Result<Self, redb::Error> {
+        // Initialize tables
+        let write_txn = db.begin_write()?;
+        {
+            let _ = write_txn.open_table(ESCROWS_TABLE)?;
+        }
+        write_txn.commit()?;
+
+        Ok(EscrowState { db })
     }
 
     /// Create a new escrow
@@ -66,23 +76,32 @@ impl EscrowState {
         let value = bincode::serialize(&escrow)
             .map_err(|e| format!("Failed to serialize escrow: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to insert escrow: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("Failed to begin write transaction: {}", e))?;
+        {
+            let mut table = write_txn
+                .open_table(ESCROWS_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table
+                .insert(key.as_slice(), value.as_slice())
+                .map_err(|e| format!("Failed to insert escrow: {}", e))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         Ok(())
     }
 
     /// Get escrow by ID
     pub fn get_escrow(&self, escrow_id: &Hash) -> Option<Escrow> {
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(ESCROWS_TABLE).ok()?;
         let key = Self::make_key(escrow_id);
-        self.db.get(key).ok()?.map(|bytes| {
-            bincode::deserialize(&bytes).ok()
-        })?
+        let bytes = table.get(key.as_slice()).ok()??;
+        bincode::deserialize(bytes.value()).ok()
     }
 
     /// Update escrow status
@@ -103,13 +122,21 @@ impl EscrowState {
         let value = bincode::serialize(&escrow)
             .map_err(|e| format!("Failed to serialize escrow: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to update escrow: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("Failed to begin write transaction: {}", e))?;
+        {
+            let mut table = write_txn
+                .open_table(ESCROWS_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table
+                .insert(key.as_slice(), value.as_slice())
+                .map_err(|e| format!("Failed to update escrow: {}", e))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         Ok(())
     }
@@ -118,11 +145,15 @@ impl EscrowState {
     pub fn get_active_escrows(&self) -> Vec<Escrow> {
         let mut escrows = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(escrow) = bincode::deserialize::<Escrow>(&value) {
-                    if escrow.status == EscrowStatus::Active {
-                        escrows.push(escrow);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(ESCROWS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(escrow) = bincode::deserialize::<Escrow>(value.value()) {
+                            if escrow.status == EscrowStatus::Active {
+                                escrows.push(escrow);
+                            }
+                        }
                     }
                 }
             }
@@ -135,11 +166,15 @@ impl EscrowState {
     pub fn get_escrows_by_sender(&self, sender: &Address) -> Vec<Escrow> {
         let mut escrows = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(escrow) = bincode::deserialize::<Escrow>(&value) {
-                    if escrow.sender == *sender {
-                        escrows.push(escrow);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(ESCROWS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(escrow) = bincode::deserialize::<Escrow>(value.value()) {
+                            if escrow.sender == *sender {
+                                escrows.push(escrow);
+                            }
+                        }
                     }
                 }
             }
@@ -152,11 +187,15 @@ impl EscrowState {
     pub fn get_escrows_by_recipient(&self, recipient: &Address) -> Vec<Escrow> {
         let mut escrows = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(escrow) = bincode::deserialize::<Escrow>(&value) {
-                    if escrow.recipient == *recipient {
-                        escrows.push(escrow);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(ESCROWS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(escrow) = bincode::deserialize::<Escrow>(value.value()) {
+                            if escrow.recipient == *recipient {
+                                escrows.push(escrow);
+                            }
+                        }
                     }
                 }
             }
@@ -170,11 +209,15 @@ impl EscrowState {
         let now = chrono::Utc::now().timestamp();
         let mut expired = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(escrow) = bincode::deserialize::<Escrow>(&value) {
-                    if escrow.status == EscrowStatus::Active && escrow.timeout <= now {
-                        expired.push(escrow);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(ESCROWS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(escrow) = bincode::deserialize::<Escrow>(value.value()) {
+                            if escrow.status == EscrowStatus::Active && escrow.timeout <= now {
+                                expired.push(escrow);
+                            }
+                        }
                     }
                 }
             }
@@ -233,11 +276,15 @@ impl EscrowState {
     pub fn get_escrowed_balance(&self, address: &Address) -> Balance {
         let mut total = 0u128;
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(escrow) = bincode::deserialize::<Escrow>(&value) {
-                    if escrow.sender == *address && escrow.status == EscrowStatus::Active {
-                        total += escrow.amount;
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(ESCROWS_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(escrow) = bincode::deserialize::<Escrow>(value.value()) {
+                            if escrow.sender == *address && escrow.status == EscrowStatus::Active {
+                                total += escrow.amount;
+                            }
+                        }
                     }
                 }
             }
@@ -262,8 +309,8 @@ mod tests {
     #[test]
     fn test_create_and_get_escrow() {
         let dir = tempdir().unwrap();
-        let db = Arc::new(sled::open(dir.path()).unwrap());
-        let state = EscrowState::new(db);
+        let db = Arc::new(Database::create(dir.path().join("escrow_test")).unwrap());
+        let state = EscrowState::new(db).unwrap();
 
         let escrow = Escrow {
             escrow_id: Hash::from_bytes([1u8; 32]),
@@ -288,8 +335,8 @@ mod tests {
     #[test]
     fn test_can_release() {
         let dir = tempdir().unwrap();
-        let db = Arc::new(sled::open(dir.path()).unwrap());
-        let state = EscrowState::new(db);
+        let db = Arc::new(Database::create(dir.path().join("escrow_release_test")).unwrap());
+        let state = EscrowState::new(db).unwrap();
 
         let recipient = Address::from_bytes([3u8; 32]);
         let arbiter = Address::from_bytes([4u8; 32]);

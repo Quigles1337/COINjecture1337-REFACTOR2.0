@@ -2,16 +2,31 @@
 // Block storage, best chain tracking, and chain reorganization
 
 use coinject_core::{Block, BlockHeader, Hash};
-use sled::Db;
+use redb::{Database, TableDefinition};
 use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+// Table definitions for redb (using fixed-size arrays for hash keys, strings for metadata keys)
+const BLOCKS_TABLE: TableDefinition<&[u8; 32], &[u8]> = TableDefinition::new("blocks");
+const METADATA_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("metadata");
+const HEIGHT_INDEX_TABLE: TableDefinition<u64, &[u8; 32]> = TableDefinition::new("height_index");
+
 #[derive(Error, Debug)]
 pub enum ChainError {
     #[error("Database error: {0}")]
-    DatabaseError(#[from] sled::Error),
+    DatabaseError(#[from] redb::Error),
+    #[error("Database creation error: {0}")]
+    DatabaseCreationError(#[from] redb::DatabaseError),
+    #[error("Storage error: {0}")]
+    StorageError(#[from] redb::StorageError),
+    #[error("Table error: {0}")]
+    TableError(#[from] redb::TableError),
+    #[error("Commit error: {0}")]
+    CommitError(#[from] redb::CommitError),
+    #[error("Transaction error: {0}")]
+    TransactionError(#[from] redb::TransactionError),
     #[error("Block not found")]
     BlockNotFound,
     #[error("Invalid block height")]
@@ -24,8 +39,8 @@ pub enum ChainError {
 
 /// Chain state manager handling block storage and retrieval
 pub struct ChainState {
-    /// Sled database for block storage
-    db: Db,
+    /// redb database for block storage
+    db: Arc<Database>,
     /// Best block height
     best_height: Arc<RwLock<u64>>,
     /// Best block hash
@@ -37,15 +52,31 @@ pub struct ChainState {
 impl ChainState {
     /// Create or open chain state database
     pub fn new<P: AsRef<Path>>(path: P, genesis_block: &Block) -> Result<Self, ChainError> {
-        let db = sled::open(path)?;
+        let db = Database::create(path)?;
+        let db = Arc::new(db);
 
         let genesis_hash = genesis_block.header.hash();
 
+        // Initialize tables
+        let init_txn = db.begin_write()?;
+        {
+            let _ = init_txn.open_table(BLOCKS_TABLE)?;
+            let _ = init_txn.open_table(METADATA_TABLE)?;
+            let _ = init_txn.open_table(HEIGHT_INDEX_TABLE)?;
+        }
+        init_txn.commit()?;
+
         // Check if genesis exists
-        if let Some(stored_genesis) = db.get(b"genesis_hash")? {
+        let read_txn = db.begin_read()?;
+        let stored_genesis = {
+            let table = read_txn.open_table(METADATA_TABLE)?;
+            table.get("genesis_hash")?
+        };
+
+        if let Some(stored_hash_ref) = stored_genesis {
             let stored_hash = Hash::from_bytes(
-                stored_genesis
-                    .as_ref()
+                stored_hash_ref
+                    .value()
                     .try_into()
                     .map_err(|_| ChainError::GenesisMismatch)?,
             );
@@ -55,22 +86,48 @@ impl ChainState {
             }
         } else {
             // Store genesis block
-            db.insert(b"genesis_hash", genesis_hash.as_bytes())?;
+            drop(read_txn);
+
+            let write_txn = db.begin_write()?;
+            {
+                let mut metadata_table = write_txn.open_table(METADATA_TABLE)?;
+                metadata_table.insert("genesis_hash", genesis_hash.as_bytes() as &[u8])?;
+                metadata_table.insert("best_height", 0u64.to_le_bytes().as_ref())?;
+                metadata_table.insert("best_hash", genesis_hash.as_bytes() as &[u8])?;
+            }
+            write_txn.commit()?;
+
             Self::store_block_raw(&db, genesis_block)?;
-            db.insert(b"best_height", &0u64.to_le_bytes())?;
-            db.insert(b"best_hash", genesis_hash.as_bytes())?;
         }
 
         // Load best height and hash
-        let best_height = db
-            .get(b"best_height")?
-            .map(|bytes| u64::from_le_bytes(bytes.as_ref().try_into().unwrap()))
-            .unwrap_or(0);
+        let read_txn = db.begin_read()?;
+        let (best_height, best_hash) = {
+            let table = read_txn.open_table(METADATA_TABLE)?;
 
-        let best_hash = db
-            .get(b"best_hash")?
-            .map(|bytes| Hash::from_bytes(bytes.as_ref().try_into().unwrap()))
-            .unwrap_or(genesis_hash);
+            let height_bytes = table
+                .get("best_height")?
+                .map(|v| v.value().to_vec());
+
+            let hash_bytes = table
+                .get("best_hash")?
+                .map(|v| v.value().to_vec());
+
+            let height = height_bytes
+                .as_ref()
+                .and_then(|b| <[u8; 8]>::try_from(b.as_slice()).ok())
+                .map(u64::from_le_bytes)
+                .unwrap_or(0);
+
+            let hash = hash_bytes
+                .as_ref()
+                .and_then(|b| <[u8; 32]>::try_from(b.as_slice()).ok())
+                .map(Hash::from_bytes)
+                .unwrap_or(genesis_hash);
+
+            (height, hash)
+        };
+        drop(read_txn);
 
         Ok(ChainState {
             db,
@@ -81,16 +138,22 @@ impl ChainState {
     }
 
     /// Store a block in the database
-    fn store_block_raw(db: &Db, block: &Block) -> Result<(), ChainError> {
+    fn store_block_raw(db: &Arc<Database>, block: &Block) -> Result<(), ChainError> {
         let block_bytes = bincode::serialize(block)?;
         let hash = block.header.hash();
+        let height = block.header.height;
 
-        // Store by hash
-        db.insert(hash.as_bytes(), block_bytes.as_slice())?;
+        let write_txn = db.begin_write()?;
+        {
+            // Store by hash
+            let mut blocks_table = write_txn.open_table(BLOCKS_TABLE)?;
+            blocks_table.insert(hash.as_bytes(), block_bytes.as_slice())?;
 
-        // Store hash by height (for quick height lookups)
-        let height_key = format!("height:{}", block.header.height);
-        db.insert(height_key.as_bytes(), hash.as_bytes())?;
+            // Store hash by height (for quick height lookups)
+            let mut height_table = write_txn.open_table(HEIGHT_INDEX_TABLE)?;
+            height_table.insert(height, hash.as_bytes())?;
+        }
+        write_txn.commit()?;
 
         Ok(())
     }
@@ -111,8 +174,13 @@ impl ChainState {
             *self.best_height.write().await = block_height;
             *self.best_hash.write().await = block_hash;
 
-            self.db.insert(b"best_height", &block_height.to_le_bytes())?;
-            self.db.insert(b"best_hash", block_hash.as_bytes())?;
+            let write_txn = self.db.begin_write()?;
+            {
+                let mut table = write_txn.open_table(METADATA_TABLE)?;
+                table.insert("best_height", block_height.to_le_bytes().as_ref())?;
+                table.insert("best_hash", block_hash.as_bytes() as &[u8])?;
+            }
+            write_txn.commit()?;
 
             println!("New best block: height={} hash={:?}", block_height, block_hash);
             return Ok(true);
@@ -123,9 +191,12 @@ impl ChainState {
 
     /// Get block by hash
     pub fn get_block_by_hash(&self, hash: &Hash) -> Result<Option<Block>, ChainError> {
-        match self.db.get(hash.as_bytes())? {
-            Some(bytes) => {
-                let block: Block = bincode::deserialize(&bytes)?;
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(BLOCKS_TABLE)?;
+
+        match table.get(hash.as_bytes())? {
+            Some(bytes_ref) => {
+                let block: Block = bincode::deserialize(bytes_ref.value())?;
                 Ok(Some(block))
             }
             None => Ok(None),
@@ -134,10 +205,13 @@ impl ChainState {
 
     /// Get block by height
     pub fn get_block_by_height(&self, height: u64) -> Result<Option<Block>, ChainError> {
-        let height_key = format!("height:{}", height);
-        match self.db.get(height_key.as_bytes())? {
-            Some(hash_bytes) => {
-                let hash = Hash::from_bytes(hash_bytes.as_ref().try_into().unwrap());
+        let read_txn = self.db.begin_read()?;
+        let height_table = read_txn.open_table(HEIGHT_INDEX_TABLE)?;
+
+        match height_table.get(height)? {
+            Some(hash_bytes_ref) => {
+                let hash = Hash::from_bytes(*hash_bytes_ref.value());
+                drop(read_txn);
                 self.get_block_by_hash(&hash)
             }
             None => Ok(None),
@@ -182,7 +256,9 @@ impl ChainState {
 
     /// Check if a block exists
     pub fn has_block(&self, hash: &Hash) -> Result<bool, ChainError> {
-        Ok(self.db.contains_key(hash.as_bytes())?)
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(BLOCKS_TABLE)?;
+        Ok(table.get(hash.as_bytes())?.is_some())
     }
 
     /// Get chain statistics

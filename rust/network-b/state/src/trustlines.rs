@@ -9,9 +9,12 @@
 // - Viviani Oracle: Δ = (d₁ + d₂ + d₃)/(√3/2) - 1
 
 use coinject_core::{Address, Balance, Hash};
+use redb::{Database, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
-use sled::Db;
 use std::sync::Arc;
+
+// Table definition for redb
+const TRUSTLINES_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("trustlines");
 
 /// Satoshi Constant: η = λ = 1/√2 (critical damping at unit circle)
 pub const SATOSHI_ETA: f64 = 0.7071067811865476; // 1/√2
@@ -182,13 +185,20 @@ impl TrustLine {
 
 /// TrustLine state management with dimensional economics
 pub struct TrustLineState {
-    db: Arc<Db>,
+    db: Arc<Database>,
 }
 
 impl TrustLineState {
     /// Create new trustline state manager
-    pub fn new(db: Arc<Db>) -> Self {
-        TrustLineState { db }
+    pub fn new(db: Arc<Database>) -> Result<Self, redb::Error> {
+        // Initialize tables
+        let write_txn = db.begin_write()?;
+        {
+            let _ = write_txn.open_table(TRUSTLINES_TABLE)?;
+        }
+        write_txn.commit()?;
+
+        Ok(TrustLineState { db })
     }
 
     /// Create a new trustline
@@ -212,23 +222,32 @@ impl TrustLineState {
         let value = bincode::serialize(&trustline)
             .map_err(|e| format!("Failed to serialize trustline: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to insert trustline: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("Failed to begin write transaction: {}", e))?;
+        {
+            let mut table = write_txn
+                .open_table(TRUSTLINES_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table
+                .insert(key.as_slice(), value.as_slice())
+                .map_err(|e| format!("Failed to insert trustline: {}", e))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         Ok(())
     }
 
     /// Get trustline by ID
     pub fn get_trustline(&self, trustline_id: &Hash) -> Option<TrustLine> {
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(TRUSTLINES_TABLE).ok()?;
         let key = Self::make_key(trustline_id);
-        self.db.get(key).ok()?.map(|bytes| {
-            bincode::deserialize(&bytes).ok()
-        })?
+        let bytes = table.get(key.as_slice()).ok()??;
+        bincode::deserialize(bytes.value()).ok()
     }
 
     /// Update trustline balance (for payments through the line)
@@ -363,11 +382,15 @@ impl TrustLineState {
     pub fn get_trustlines_for_address(&self, address: &Address) -> Vec<TrustLine> {
         let mut trustlines = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(trustline) = bincode::deserialize::<TrustLine>(&value) {
-                    if trustline.is_participant(address) && trustline.status == TrustLineStatus::Active {
-                        trustlines.push(trustline);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(TRUSTLINES_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(trustline) = bincode::deserialize::<TrustLine>(value.value()) {
+                            if trustline.is_participant(address) && trustline.status == TrustLineStatus::Active {
+                                trustlines.push(trustline);
+                            }
+                        }
                     }
                 }
             }
@@ -382,13 +405,17 @@ impl TrustLineState {
         account_a: &Address,
         account_b: &Address,
     ) -> Option<TrustLine> {
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(trustline) = bincode::deserialize::<TrustLine>(&value) {
-                    if (trustline.account_a == *account_a && trustline.account_b == *account_b)
-                        || (trustline.account_a == *account_b && trustline.account_b == *account_a)
-                    {
-                        return Some(trustline);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(TRUSTLINES_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(trustline) = bincode::deserialize::<TrustLine>(value.value()) {
+                            if (trustline.account_a == *account_a && trustline.account_b == *account_b)
+                                || (trustline.account_a == *account_b && trustline.account_b == *account_a)
+                            {
+                                return Some(trustline);
+                            }
+                        }
                     }
                 }
             }
@@ -400,11 +427,15 @@ impl TrustLineState {
     pub fn get_trustlines_by_dimension(&self, dimension: u8) -> Vec<TrustLine> {
         let mut trustlines = Vec::new();
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(trustline) = bincode::deserialize::<TrustLine>(&value) {
-                    if trustline.dimensional_scale == dimension && trustline.status == TrustLineStatus::Active {
-                        trustlines.push(trustline);
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(TRUSTLINES_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(trustline) = bincode::deserialize::<TrustLine>(value.value()) {
+                            if trustline.dimensional_scale == dimension && trustline.status == TrustLineStatus::Active {
+                                trustlines.push(trustline);
+                            }
+                        }
                     }
                 }
             }
@@ -418,12 +449,16 @@ impl TrustLineState {
         let mut total_delta = 0.0;
         let mut count = 0;
 
-        for item in self.db.iter() {
-            if let Ok((_, value)) = item {
-                if let Ok(trustline) = bincode::deserialize::<TrustLine>(&value) {
-                    if trustline.status == TrustLineStatus::Active {
-                        total_delta += trustline.viviani_delta;
-                        count += 1;
+        if let Ok(read_txn) = self.db.begin_read() {
+            if let Ok(table) = read_txn.open_table(TRUSTLINES_TABLE) {
+                for item in table.iter().ok().into_iter().flatten() {
+                    if let Ok((_, value)) = item {
+                        if let Ok(trustline) = bincode::deserialize::<TrustLine>(value.value()) {
+                            if trustline.status == TrustLineStatus::Active {
+                                total_delta += trustline.viviani_delta;
+                                count += 1;
+                            }
+                        }
                     }
                 }
             }
@@ -442,13 +477,21 @@ impl TrustLineState {
         let value = bincode::serialize(trustline)
             .map_err(|e| format!("Failed to serialize trustline: {}", e))?;
 
-        self.db
-            .insert(key, value)
-            .map_err(|e| format!("Failed to save trustline: {}", e))?;
-
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("Failed to begin write transaction: {}", e))?;
+        {
+            let mut table = write_txn
+                .open_table(TRUSTLINES_TABLE)
+                .map_err(|e| format!("Failed to open table: {}", e))?;
+            table
+                .insert(key.as_slice(), value.as_slice())
+                .map_err(|e| format!("Failed to save trustline: {}", e))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         Ok(())
     }
@@ -522,8 +565,8 @@ mod tests {
     #[test]
     fn test_create_trustline() {
         let dir = tempdir().unwrap();
-        let db = Arc::new(sled::open(dir.path()).unwrap());
-        let state = TrustLineState::new(db);
+        let db = Arc::new(Database::create(dir.path().join("trustline_test")).unwrap());
+        let state = TrustLineState::new(db).unwrap();
 
         let trustline = TrustLine {
             trustline_id: Hash::from_bytes([1u8; 32]),
